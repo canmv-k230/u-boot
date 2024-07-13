@@ -1497,6 +1497,12 @@ config CMD_USB_MASS_STORAGE
 	  export a block device: U-Boot, the USB device, acts as a simple
 	  external hard drive plugged on the host USB port.
 
+config CMD_KBURN
+	bool "kburn"
+	select KBURN
+	help
+		Kendryte burning protocol.
+
 config CMD_PVBLOCK
 	bool "Xen para-virtualized block device"
 	depends on XEN

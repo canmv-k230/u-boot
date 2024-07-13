@@ -54,6 +54,8 @@ source "drivers/input/Kconfig"
 
 source "drivers/iommu/Kconfig"
 
+source "drivers/kburn/Kconfig"
+
 source "drivers/led/Kconfig"
 
 source "drivers/mailbox/Kconfig"

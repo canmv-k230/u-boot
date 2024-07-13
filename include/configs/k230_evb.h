@@ -35,8 +35,8 @@
 #define CONFIG_SYS_NS16550_MEM32
 #define DWC2_UTMI_WIDTH 16
 
-#if CONFIG_CMD_DFU
-#define DEFAULT_BOOTCMD_ENV "bootcmd=k230_dfu; \0"
+#if CONFIG_CMD_KBURN
+#define DEFAULT_BOOTCMD_ENV //"bootcmd=kburn 0; \0"
 #else
 #define DEFAULT_BOOTCMD_ENV "bootcmd=k230_boot auto auto_boot; \0"
 #endif

@@ -241,6 +241,8 @@ static int do_k230_dfu(struct cmd_tbl *cmdtp, int flag, int argc, char *const ar
     char alt_info[1024];
     int alt_info_len = 0;
 
+    memset(alt_info, 0, sizeof(alt_info));
+
     struct BurnImageConfig *cfg = NULL;
     struct BurnImageConfig *cfgOrig = (struct BurnImageConfig *)0x80250000;
 
@@ -279,7 +281,7 @@ static int do_k230_dfu(struct cmd_tbl *cmdtp, int flag, int argc, char *const ar
         */
         int sector = 1;
 
-       char *pInfo = &alt_info[0];
+        char *pInfo = &alt_info[0];
 
         switch (cfg->cfgTarget)
         {
@@ -329,7 +331,7 @@ static int do_k230_dfu(struct cmd_tbl *cmdtp, int flag, int argc, char *const ar
         else {
             pInfo = &alt_info[0];
         }
-        sprintf(pInfo, "%s", "virt 0=otp&virt 1=otp_lock&virt 2=cde&virt 3=cde_lock");
+        // sprintf(pInfo, "%s", "virt 0=otp&virt 1=otp_lock&virt 2=cde&virt 3=cde_lock");
 
         printf("alt_info \'%s\'\n", alt_info);
 
