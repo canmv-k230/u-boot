@@ -228,6 +228,43 @@ static void kburn_unbind(struct usb_configuration *c, struct usb_function *f)
 	memset(s_kburn, 0, sizeof(*s_kburn));
 }
 
+static int kburn_handle_setup(struct usb_function *f, const struct usb_ctrlrequest *ctrl)
+{
+	struct usb_gadget *gadget = f->config->cdev->gadget;
+	struct usb_request *req = f->config->cdev->req;
+
+	u16		w_index = get_unaligned_le16(&ctrl->wIndex);
+	u16		w_value = get_unaligned_le16(&ctrl->wValue);
+	u16		w_length = get_unaligned_le16(&ctrl->wLength);
+	u8		req_type = ctrl->bRequestType & USB_TYPE_MASK;
+
+	int value = 0;
+
+	printf("w_index 0x%x, w_value 0x%x, w_length %d, req_type %x\n", \
+		w_index, w_value, w_length, req_type);
+
+	if (USB_TYPE_VENDOR == (req_type & USB_TYPE_VENDOR)) {
+		if ((0x00 == w_index) && (0x000 == w_value)) {
+			const char *mark = "Uboot Stage for K230";
+
+			strncpy(req->buf, mark, w_length);
+			value = strlen(mark);
+		}
+	}
+
+	if (value >= 0) {
+		req->length = value;
+		req->zero = value < w_length;
+		value = usb_ep_queue(gadget->ep0, req, 0);
+		if (value < 0) {
+			debug("ep_queue --> %d\n", value);
+			req->status = 0;
+		}
+	}
+
+	return value;
+}
+
 static struct usb_request *kburn_start_ep(struct usb_ep *ep)
 {
 	struct usb_request *req;
@@ -348,8 +385,9 @@ static int kburn_add(struct usb_configuration *c)
 	kburn_usb->usb_function.set_alt = kburn_set_alt;
 	kburn_usb->usb_function.disable = kburn_disable;
 
+	kburn_usb->usb_function.setup = kburn_handle_setup;
+
 	// kburn_usb->usb_function.get_alt = kburn_get_alt;
-	// kburn_usb->usb_function.setup = kburn_setup;
 	// kburn_usb->usb_function.suspend = kburn_suspend;
 	// kburn_usb->usb_function.resume = kburn_resume;
 
@@ -492,6 +530,7 @@ static void cb_probe_device(struct usb_ep *ep, struct usb_request *req)
 
 	uint8_t index = 0;
 	enum KBURN_MEDIA_TYPE type = KBURN_MEDIA_NONE;
+	uint64_t result[1] = {KBURN_USB_EP_BUFFER_SZIE};
 
 	memcpy((char *)cbw, req->buf, KBUNR_USB_PKT_SIZE);
 
@@ -506,10 +545,10 @@ static void cb_probe_device(struct usb_ep *ep, struct usb_request *req)
 		kburn_destory(kburn_usb->burner);
 		kburn_usb->burner = NULL;
 	}
-	kburn_usb->burner = kburn_probe_media(type, index);
+	kburn_usb->burner = kburn_probe_media(type);
 
 	if (kburn_usb->burner) {
-		kburn_tx_result(KBURN_CMD_DEV_PROBE, KBURN_RESULT_OK, NULL, 0);
+		kburn_tx_result(KBURN_CMD_DEV_PROBE, KBURN_RESULT_OK, (uint8_t *)&result[0], sizeof(result));
 	} else {
 		kburn_tx_string_result(KBURN_CMD_DEV_PROBE, KBURN_RESULT_ERROR_MSG, "PROBE FAILED");
 	}
@@ -581,8 +620,10 @@ static void rx_write_lba_handler(struct usb_ep *ep, struct usb_request *req)
 
 	/*
 		不开启写入，速度 16291kiB/s, 2024-07-13 09:42:28 - DEBUG - write 167772160 use 10.1
-		开启写入，速度 2447kiB/s, 2024-07-13 09:41:01 - DEBUG - write 167772160 use 66.9
+		eMMC开启写入，速度 7745kiB/s, 2024-07-13 10:17:48 - DEBUG - write 167772160 use 21.2
+		SD卡开启写入，速度 2447kiB/s, 2024-07-13 09:41:01 - DEBUG - write 167772160 use 66.9
 	*/
+
 	u64 xfer_size = transfer_size;
 	int result = kburn_write_medium(kburn_usb->burner, kburn_usb->offset, kburn_usb->buf, &xfer_size);
 	if((0x00 != result) || (xfer_size != transfer_size)) {

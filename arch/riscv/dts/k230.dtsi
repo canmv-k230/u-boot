@@ -212,9 +212,7 @@
 			g-tx-fifo-size = <128 128 128 128 128 128>;
 			dr_mode = "otg";
 			otg-rev = <0x200>;
-#ifndef CONFIG_CMD_DFU
 			status = "disabled";
-#endif
 		};
 
 		usbotg1: usb-otg@91540000 {

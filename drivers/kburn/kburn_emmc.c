@@ -6,7 +6,7 @@
 #include <dm.h>
 #include <mmc.h>
 
-#include "kburn.h"
+#include <kburn.h>
 
 #define MMC_OP_READ     0x01
 #define MMC_OP_WRITE    0x02
@@ -41,6 +41,8 @@ static int mmc_get_medium_info(struct kburn *burn)
     burn->medium_info.capacity = (u64)desc->lba * (u64)desc->blksz;
     burn->medium_info.erase_size = (u64)mmc->erase_grp_size * (u64)desc->blksz;
     burn->medium_info.blk_size = desc->blksz;
+    burn->medium_info.timeout_ms = 1000;
+    burn->medium_info.type = KBURN_MEDIA_eMMC;
 
     pr_info("Device MMC %d capacity %lld, erase size %lld, blk_sz %lld\n", \
         priv->dev_num, burn->medium_info.capacity, burn->medium_info.erase_size, burn->medium_info.blk_size);
@@ -108,9 +110,9 @@ static int mmc_read_medium(struct kburn *burn, u64 offset, void *buf, u64 *len)
 	return mmc_op(MMC_OP_READ, burn, offset, buf, len);
 }
 
-static int mmc_write_medium(struct kburn *burn, u64 offset, void *buf, u64 *len)
+static int mmc_write_medium(struct kburn *burn, u64 offset, const void *buf, u64 *len)
 {
-	return mmc_op(MMC_OP_WRITE, burn, offset, buf, len);
+	return mmc_op(MMC_OP_WRITE, burn, offset, (void *)buf, len);
 }
 
 static int mmc_erase_medium(struct kburn *burn, u64 offset, u64 *len)
@@ -124,9 +126,10 @@ static int mmc_destory(struct kburn *burn)
 }
 
 #if defined (CONFIG_DM_MMC)
-struct kburn *kburn_mmc_probe(uint8_t index)
+struct kburn *kburn_mmc_probe(uint8_t bus)
 {
-	struct udevice *dev;
+	struct uclass *uc;
+	struct udevice *dev, *dev_bus;
 
     struct mmc *mmc;
     struct blk_desc *desc;
@@ -134,16 +137,25 @@ struct kburn *kburn_mmc_probe(uint8_t index)
     struct kburn *burner;
     struct kburn_mmc_priv *priv;
 
-    uint8_t idx = 0;
+    int ret;
 
-	for (uclass_first_device(UCLASS_MMC, &dev); dev; uclass_next_device(&dev)) {
-        if((0xFF != index) && ((idx++) != index)) {
-            continue;
-        }
+	ret = uclass_get(UCLASS_MMC, &uc);
+    if(ret) {
+        pr_err("can not get mmc uclass\n");
+        return NULL;
+    }
 
-        mmc = mmc_get_mmc_dev(dev);
-        if(mmc && (0x00 == mmc_init(mmc))) {
-            break;
+	uclass_foreach_dev(dev, uc) {
+        if(NULL != (mmc = mmc_get_mmc_dev(dev))) {
+            if(0x00 == mmc_init(mmc)) {
+                if(0xFF != bus) {
+                    dev_bus = dev_get_parent(dev);
+                    if(dev_seq(dev_bus) != bus) {
+                        continue;
+                    }
+                }
+                break;
+            }
         }
     }
 
@@ -172,7 +184,7 @@ struct kburn *kburn_mmc_probe(uint8_t index)
 
     pr_info("probe mmc succ, dev %d\n", priv->dev_num);
 
-    burner->type = KBURN_MEDIA_MMC;
+    burner->type = KBURN_MEDIA_eMMC;
     burner->dev_priv = (void *)priv;
 
 	burner->get_medium_info = mmc_get_medium_info;

@@ -10,10 +10,17 @@ config KBURN_OVER_USB
 
 if KBURN
 config KBURN_EMMC
-    bool "MMC back end for KBURN"
+    bool "MMC backend for KBURN"
     select DM
     help
 	  This option enables using KBURN to read and write to MMC based storage.
+
+config KBURN_SF
+    bool "sf(SPI Flash) backend for KBURN"
+    select DM_SPI_FLASH
+	help
+	  This option enables using KBURN to read and write to SPI flash based
+	  storage.
 
 endif
 endmenu

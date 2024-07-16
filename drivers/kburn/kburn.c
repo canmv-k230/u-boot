@@ -4,15 +4,22 @@
 
 #include "kburn.h"
 
-struct kburn * kburn_probe_media(enum KBURN_MEDIA_TYPE type, uint8_t index)
+struct kburn * kburn_probe_media(enum KBURN_MEDIA_TYPE type)
 {
     struct kburn * kburn = NULL;
 
 #if defined (CONFIG_KBURN_EMMC)
-    if(KBURN_MEDIA_MMC == type) {
-        kburn = kburn_mmc_probe(index);
+    if(KBURN_MEDIA_eMMC == type) {
+        kburn = kburn_mmc_probe(0); // K230 eMMC is on mmc0
+    } else if (KBURN_MEDIA_SDCARD == type) {
+        kburn = kburn_mmc_probe(1); // K230 SD Card is on mmc1
     } else
 #endif // CONFIG_KBURN_EMMC
+#if defined (CONFIG_KBURN_SF)
+    if(KBURN_MEDIA_SPI_NOR == type) {
+        kburn = kburn_sf_probe(0xFF);
+    } else
+#endif // CONFIG_KBURN_SF
     {
         printf("kburn probe not support type %x\n", type);
     }
@@ -42,7 +49,7 @@ int kburn_read_medium(struct kburn *burn, u64 offset, void *buf, u64 *len)
     return burn->read_medium(burn, offset, buf, len);
 }
 
-int kburn_write_medium(struct kburn *burn, u64 offset, void *buf, u64 *len)
+int kburn_write_medium(struct kburn *burn, u64 offset, const void *buf, u64 *len)
 {
     if((NULL == burn) || (NULL == burn->write_medium)) {
         pr_err("invalid arg\n");
