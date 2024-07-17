@@ -614,16 +614,6 @@ static void rx_write_lba_handler(struct usb_ep *ep, struct usb_request *req)
 	memcpy((void *)kburn_usb->buf, buffer, transfer_size);
 	kburn_usb->dl_bytes += transfer_size;
 
-	// printf("dl %x bytes, write offset %llx, dl_size:%llx, dl_bytes:%llx\n",
-	//       transfer_size, kburn_usb->offset, kburn_usb->dl_size,
-	//       kburn_usb->dl_bytes);
-
-	/*
-		不开启写入，速度 16291kiB/s, 2024-07-13 09:42:28 - DEBUG - write 167772160 use 10.1
-		eMMC开启写入，速度 7745kiB/s, 2024-07-13 10:17:48 - DEBUG - write 167772160 use 21.2
-		SD卡开启写入，速度 2447kiB/s, 2024-07-13 09:41:01 - DEBUG - write 167772160 use 66.9
-	*/
-
 	u64 xfer_size = transfer_size;
 	int result = kburn_write_medium(kburn_usb->burner, kburn_usb->offset, kburn_usb->buf, &xfer_size);
 	if((0x00 != result) || (xfer_size != transfer_size)) {

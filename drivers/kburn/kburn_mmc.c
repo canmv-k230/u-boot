@@ -1,9 +1,10 @@
 #include <common.h>
+#include <div64.h>
+#include <dm/uclass.h>
+#include <errno.h>
 #include <log.h>
 #include <malloc.h>
-#include <errno.h>
-#include <div64.h>
-#include <dm.h>
+
 #include <mmc.h>
 
 #include <kburn.h>
@@ -125,7 +126,6 @@ static int mmc_destory(struct kburn *burn)
     return 0;
 }
 
-#if defined (CONFIG_DM_MMC)
 struct kburn *kburn_mmc_probe(uint8_t bus)
 {
 	struct uclass *uc;
@@ -195,6 +195,3 @@ struct kburn *kburn_mmc_probe(uint8_t bus)
 
     return burner;
 }
-#else
-#error "Need CONFIG_DM_MMC"
-#endif

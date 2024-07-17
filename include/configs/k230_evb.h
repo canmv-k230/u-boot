@@ -36,7 +36,7 @@
 #define DWC2_UTMI_WIDTH 16
 
 #if CONFIG_CMD_KBURN
-#define DEFAULT_BOOTCMD_ENV "bootcmd=kburn 0; bootdelay=0; \0"
+#define DEFAULT_BOOTCMD_ENV "bootcmd=kburn 0; \0bootdelay=0; \0"
 #else
 #define DEFAULT_BOOTCMD_ENV "bootcmd=k230_boot auto auto_boot; \0"
 #endif

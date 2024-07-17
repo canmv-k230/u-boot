@@ -1503,6 +1503,12 @@ config CMD_KBURN
 	help
 		Kendryte burning protocol.
 
+if CMD_KBURN
+	config CMD_KBURN_BENCHMARK
+		bool "Enable benchmark command with KBURN"
+		default n
+endif
+
 config CMD_PVBLOCK
 	bool "Xen para-virtualized block device"
 	depends on XEN

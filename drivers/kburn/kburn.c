@@ -8,18 +8,23 @@ struct kburn * kburn_probe_media(enum KBURN_MEDIA_TYPE type)
 {
     struct kburn * kburn = NULL;
 
-#if defined (CONFIG_KBURN_EMMC)
+#if defined (CONFIG_KBURN_MMC)
     if(KBURN_MEDIA_eMMC == type) {
         kburn = kburn_mmc_probe(0); // K230 eMMC is on mmc0
     } else if (KBURN_MEDIA_SDCARD == type) {
         kburn = kburn_mmc_probe(1); // K230 SD Card is on mmc1
     } else
-#endif // CONFIG_KBURN_EMMC
+#endif // CONFIG_KBURN_MMC
 #if defined (CONFIG_KBURN_SF)
     if(KBURN_MEDIA_SPI_NOR == type) {
-        kburn = kburn_sf_probe(0xFF);
+        kburn = kburn_sf_probe();
     } else
 #endif // CONFIG_KBURN_SF
+#if defined (CONFIG_KBURN_MTD)
+    if(KBURN_MEDIA_SPI_NAND == type) {
+        kburn = kburn_mtd_probe();
+    } else
+#endif // CONFIG_KBURN_MTD
     {
         printf("kburn probe not support type %x\n", type);
     }

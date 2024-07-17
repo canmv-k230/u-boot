@@ -63,12 +63,16 @@ int kburn_erase_medium(struct kburn *burn, u64 offset, u64 *len);
 
 void kburn_destory(struct kburn *burn);
 
-#if defined (CONFIG_KBURN_EMMC)
+#if defined (CONFIG_KBURN_MMC)
 struct kburn *kburn_mmc_probe(uint8_t index);
-#endif // CONFIG_KBURN_EMMC
+#endif // CONFIG_KBURN_MMC
 
 #if defined (CONFIG_KBURN_SF)
-struct kburn *kburn_sf_probe(uint8_t bus);
+struct kburn *kburn_sf_probe(void);
 #endif // CONFIG_KBURN_SF
+
+#if defined (CONFIG_KBURN_MTD)
+struct kburn *kburn_mtd_probe(void);
+#endif // CONFIG_KBURN_MTD
 
 #endif // __KD_BURNER_H__
