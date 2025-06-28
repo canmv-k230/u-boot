@@ -36,17 +36,16 @@ jobs:
 
       - name: Download toolchains
         run: |
-          TOOLCHAIN_DIR="$HOME/.kendryte/k230_toolchain"
           mkdir -p ~/.kendryte
           wget -q https://github.com/kendryte/canmv_k230/releases/download/v1.1/Xuantie-900-gcc-linux-5.10.4-glibc-x86_64-V2.6.0.tar.bz2 -O /tmp/toolchain.tar.bz2
           tar -xjf /tmp/toolchain.tar.bz2 -C ~/.kendryte
-          mv ~/.kendryte/Xuantie-900-gcc-linux-5.10.4-glibc-x86_64 ~/.kendryte/k230_toolchain
+          ls -alth ~/.kendryte
 
       - name: Build Projects
         run: |
           source ~/.canmv_venv/bin/activate
           export ARCH=riscv
-          export CROSS_COMPILE=$HOME/.kendryte/Xuantie-900-gcc-linux-5.10.4-glibc-x86_64/riscv64-unknown-linux-gnu-
+          export CROSS_COMPILE=$HOME/.kendryte/Xuantie-900-gcc-linux-5.10.4-glibc-x86_64-V2.6.0/bin/riscv64-unknown-linux-gnu-
 
           defconfigs=(
             k230_canmv_01studio_defconfig
