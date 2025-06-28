@@ -16,6 +16,12 @@ jobs:
         shell: bash
 
     steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          token: ${{ secrets.GIT_TOKEN }}
+
       - name: Setup SSH
         run: |
           git config --global user.name kendryte747
