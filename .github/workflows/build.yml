@@ -1,0 +1,86 @@
+name: Build Prebuilt u-boot
+
+on:
+  push:
+    branches:
+      - canmv_k230
+      - action
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - name: Setup SSH
+        run: |
+          git config --global user.name kendryte747
+          git config --global user.email kendryte747@gmail.com
+          mkdir -p ~/.ssh
+          echo "${{ secrets.ACTIONS_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+
+      - name: Prepare Environment
+        run: |
+          sudo apt update
+          sudo apt install -y bison flex gcc libncurses5-dev pkg-config \
+            libconfuse-dev libssl-dev python3 python3-pip python-is-python3 python3-venv \
+            cmake libyaml-dev scons mtools bzip2
+          python3 -m venv ~/.canmv_venv
+          source ~/.canmv_venv/bin/activate
+          pip3 install pycryptodome gmssl jsonschema jinja2
+
+      - name: Download toolchains
+        run: |
+          TOOLCHAIN_DIR="$HOME/.kendryte/k230_toolchain"
+          mkdir -p ~/.kendryte
+          wget -q https://github.com/kendryte/canmv_k230/releases/download/v1.1/Xuantie-900-gcc-linux-5.10.4-glibc-x86_64-V2.6.0.tar.bz2 -O /tmp/toolchain.tar.bz2
+          tar -xjf /tmp/toolchain.tar.bz2 -C ~/.kendryte
+          mv ~/.kendryte/Xuantie-900-gcc-linux-5.10.4-glibc-x86_64 ~/.kendryte/k230_toolchain
+
+      - name: Build Projects
+        run: |
+          source ~/.canmv_venv/bin/activate
+          export ARCH=riscv
+          export CROSS_COMPILE=$HOME/.kendryte/Xuantie-900-gcc-linux-5.10.4-glibc-x86_64/riscv64-unknown-linux-gnu-
+
+          defconfigs=(
+            k230_canmv_01studio_defconfig
+            k230_canmv_v1p0p1_defconfig
+            k230_canmv_lckfb_defconfig
+            k230_canmv_v3p0_defconfig
+            k230d_canmv_bpi_zero_defconfig
+            k230d_canmv_atk_dnk230d_defconfig
+            k230_canmv_dongshanpi_defconfig
+          )
+
+          for UBOOT_DEFCONFIG in "${defconfigs[@]}"; do
+            echo "=============================="
+            echo " Building U-Boot: ${UBOOT_DEFCONFIG}"
+            echo "=============================="
+
+            # Setup output directories
+            export SDK_UBOOT_BUILD_DIR=$HOME/build/${UBOOT_DEFCONFIG}
+            mkdir -p ${SDK_UBOOT_BUILD_DIR}
+            mkdir -p ~/artifacts/${UBOOT_DEFCONFIG}
+
+            # Build
+            make ${UBOOT_DEFCONFIG} O=${SDK_UBOOT_BUILD_DIR} || exit $?
+            make -j$(nproc) -C ${SDK_UBOOT_BUILD_DIR} || exit $?
+
+            # Also copy artifacts to artifacts folder
+            cp ${SDK_UBOOT_BUILD_DIR}/u-boot.bin ~/artifacts/${UBOOT_DEFCONFIG}/u-boot.bin || echo "u-boot.bin missing"
+            cp ${SDK_UBOOT_BUILD_DIR}/spl/u-boot-spl.bin ~/artifacts/${UBOOT_DEFCONFIG}/u-boot-spl.bin || echo "u-boot-spl.bin missing"
+          done
+
+      - uses: actions/upload-artifact@v4
+        if: github.ref != 'refs/heads/dev'
+        with:
+          name: "u-boot-prebuilt-${{ env.REVISION }}"
+          path: ~/artifacts
+          if-no-files-found: error
+          compression-level: 0
