@@ -16,21 +16,8 @@ jobs:
         shell: bash
 
     steps:
-      - name: Checkout RTOS SDK
+      - name: Checkout code
         uses: actions/checkout@v4
-        with:
-          repository: kendryte/k230_rtos_sdk
-
-      - name: Checkout Uboot
-        uses: actions/checkout@v4
-        with:
-          repository: canmv-k230/u-boot
-          path: src/uboot/uboot
-
-      - name: List Code
-        run: |
-          ls -alth
-          tree -L 3
 
       - name: Setup SSH
         run: |
@@ -94,6 +81,26 @@ jobs:
             cp ${SDK_UBOOT_BUILD_DIR}/spl/u-boot-spl.bin ~/artifacts/${UBOOT_DEFCONFIG}/u-boot-spl.bin || echo "u-boot-spl.bin missing"
           done
 
+          # build fastboot uboot
+          rm -rf !/build
+          cp .github/workflows/sdk_autoconf.h.fastboot board/kendryte/common/sdk_autoconf.h
+
+          for UBOOT_DEFCONFIG in "${defconfigs[@]}"; do
+            echo "=============================="
+            echo " Building U-Boot: ${UBOOT_DEFCONFIG}"
+            echo "=============================="
+
+            # Setup output directories
+            export SDK_UBOOT_BUILD_DIR=$HOME/build/${UBOOT_DEFCONFIG}
+            mkdir -p ${SDK_UBOOT_BUILD_DIR}
+            mkdir -p ~/artifacts/${UBOOT_DEFCONFIG}
+
+            make ${UBOOT_DEFCONFIG} || exit $?
+            make uboot || exit $?
+
+            cp ${SDK_UBOOT_BUILD_DIR}/spl/u-boot-spl.bin ~/artifacts/${UBOOT_DEFCONFIG}/u-boot-spl-fastboot.bin || echo "u-boot-spl.bin missing"
+          done
+
       - uses: actions/upload-artifact@v4
         if: github.ref != 'refs/heads/dev'
         with:
@@ -101,3 +108,8 @@ jobs:
           path: ~/artifacts
           if-no-files-found: error
           compression-level: 0
+
+      - name: Clean up SSH private key
+        if: always()
+        run: |
+          rm -f ~/.ssh/id_rsa

@@ -39,6 +39,10 @@
 #warning "sdk_autoconf.h not found. Default behavior will be used."
 #endif
 
+#if !defined(CONFIG_MEM_BASE_ADDR)
+#define CONFIG_MEM_BASE_ADDR  0x00
+#endif
+
 typedef enum {
     BOOT_MEDIUM_NORFLASH  = 0,
     BOOT_MEDIUM_NANDFLASH = 1,

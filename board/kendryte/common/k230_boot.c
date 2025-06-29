@@ -50,14 +50,7 @@
 #include <asm/global_data.h>
 DECLARE_GLOBAL_DATA_PTR;
 #define CONFIG_MEM_TOTAL_SIZE (gd->ram_size)
-#endif
-
-#ifndef CONFIG_MEM_BASE_ADDR
-#undef CONFIG_MEM_BASE_ADDR
-#undef CONFIG_MEM_TOTAL_SIZE
-
-// we assume min ddr size is 128MB, and dts set memory start address is 0.
-#define CONFIG_MEM_BASE_ADDR  0x00
+#else
 #define CONFIG_MEM_TOTAL_SIZE (128 * 1024 * 1024)
 #endif
 
