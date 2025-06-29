@@ -36,7 +36,7 @@
 // Fallback definition or other code
 #ifndef MYHEADER_EXISTS
 // Provide alternative definitions or inform about missing header
-#warning "sdk_autoconf.h not found. Default behavior will be used."
+#warning "sdk_autoconf.h not found. Default configure will be used."
 #endif
 
 #if !defined(CONFIG_MEM_BASE_ADDR)
