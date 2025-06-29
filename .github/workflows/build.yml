@@ -19,12 +19,12 @@ jobs:
       - name: Checkout RTOS SDK
         uses: actions/checkout@v4
         with:
-          repository: https://github.com/kendryte/k230_rtos_sdk
+          repository: kendryte/k230_rtos_sdk
 
       - name: Checkout Uboot
         uses: actions/checkout@v4
         with:
-          repository: https://github.com/canmv-k230/u-boot
+          repository: canmv-k230/u-boot
           path: src/uboot/uboot
 
       - name: List Code
