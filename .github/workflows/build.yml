@@ -74,9 +74,6 @@ jobs:
             k230d_labplus_ai_camera_defconfig
           )
 
-          pwd
-          ls -alth
-
           for UBOOT_DEFCONFIG in "${defconfigs[@]}"; do
             echo "=============================="
             echo " Building U-Boot: ${UBOOT_DEFCONFIG}"
@@ -99,7 +96,7 @@ jobs:
           done
 
           # build fastboot uboot
-          rm -rf !/build
+          rm -rf ~/build
           cp .github/workflows/sdk_autoconf.h.fastboot board/kendryte/common/sdk_autoconf.h
 
           for UBOOT_DEFCONFIG in "${defconfigs[@]}"; do
