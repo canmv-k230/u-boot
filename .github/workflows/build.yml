@@ -73,8 +73,8 @@ jobs:
             mkdir -p ~/artifacts/${UBOOT_DEFCONFIG}
 
             # Build
-            make ${UBOOT_DEFCONFIG} || exit $?
-            make uboot || exit $?
+            make ${UBOOT_DEFCONFIG} O=${SDK_UBOOT_BUILD_DIR} || exit $?
+            make -j$(nproc) -C ${SDK_UBOOT_BUILD_DIR} || exit $?
 
             # Also copy artifacts to artifacts folder
             cp ${SDK_UBOOT_BUILD_DIR}/u-boot.bin ~/artifacts/${UBOOT_DEFCONFIG}/u-boot.bin || echo "u-boot.bin missing"
