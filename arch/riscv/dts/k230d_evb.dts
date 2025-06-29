@@ -32,7 +32,7 @@
 #define BANK_VOLTAGE_IO38_IO49	 K230_MSC_1V8
 #define BANK_VOLTAGE_IO50_IO61	 K230_MSC_1V8
 #define BANK_VOLTAGE_IO62_IO63	 K230_MSC_1V8
-#include "k230.dtsi"
+#include "k230d.dtsi"
 
 / {
 	model = "kendryte k230d evb";
