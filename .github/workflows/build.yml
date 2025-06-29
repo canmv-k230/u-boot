@@ -36,7 +36,15 @@ jobs:
           source ~/.canmv_venv/bin/activate
           pip3 install pycryptodome gmssl jsonschema jinja2
 
+      - name: Cache RISC-V Toolchain
+        id: cache-toolchain
+        uses: actions/cache@v4
+        with:
+          path: ~/.kendryte/Xuantie-900-gcc-linux-5.10.4-glibc-x86_64-V2.6.0/
+          key: k230-toolchain-v2.6.0
+
       - name: Download toolchains
+        if: steps.cache-toolchain.outputs.cache-hit != 'true'
         run: |
           mkdir -p ~/.kendryte
           wget -q https://github.com/kendryte/canmv_k230/releases/download/v1.1/Xuantie-900-gcc-linux-5.10.4-glibc-x86_64-V2.6.0.tar.bz2 -O /tmp/toolchain.tar.bz2
