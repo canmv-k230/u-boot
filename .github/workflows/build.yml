@@ -104,10 +104,12 @@ jobs:
             echo " Building U-Boot: ${UBOOT_DEFCONFIG}"
             echo "=============================="
 
+            base_name=${UBOOT_DEFCONFIG%_defconfig}
+
             # Setup output directories
-            export SDK_UBOOT_BUILD_DIR=$HOME/build/${UBOOT_DEFCONFIG}
+            export SDK_UBOOT_BUILD_DIR=$HOME/build/${base_name}
             mkdir -p ${SDK_UBOOT_BUILD_DIR}
-            mkdir -p ~/artifacts/${UBOOT_DEFCONFIG}
+            mkdir -p ~/artifacts/${base_name}
 
             # Build
             make ${UBOOT_DEFCONFIG} O=${SDK_UBOOT_BUILD_DIR} || exit $?
