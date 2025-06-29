@@ -37,7 +37,6 @@
 #ifndef MYHEADER_EXISTS
 // Provide alternative definitions or inform about missing header
 #warning "sdk_autoconf.h not found. Default configure will be used."
-#endif
 
 #if !defined(CONFIG_MEM_BASE_ADDR)
 #define CONFIG_MEM_BASE_ADDR  0x00
@@ -45,6 +44,12 @@
 
 #if !defined (CONFIG_RTSMART_OPENSIB_MEMORY_SIZE)
 #define CONFIG_RTSMART_OPENSIB_MEMORY_SIZE 0x20000
+#endif
+
+#if !defined(CONFIG_MEM_TOTAL_SIZE)
+#define CONFIG_MEM_TOTAL_SIZE (128 * 1024 * 1024)
+#endif
+
 #endif
 
 typedef enum {

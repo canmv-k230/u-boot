@@ -47,11 +47,14 @@
 #include "board_common.h"
 
 #ifdef CONFIG_AUTO_DETECT_DDR_SIZE
-#include <asm/global_data.h>
-DECLARE_GLOBAL_DATA_PTR;
-#define CONFIG_MEM_TOTAL_SIZE (gd->ram_size)
+    #include <asm/global_data.h>
+    DECLARE_GLOBAL_DATA_PTR;
+
+    #ifndef CONFIG_MEM_TOTAL_SIZE
+        #define CONFIG_MEM_TOTAL_SIZE (gd->ram_size)
+    #endif
 #else
-#define CONFIG_MEM_TOTAL_SIZE (128 * 1024 * 1024)
+    #define CONFIG_MEM_TOTAL_SIZE (128 * 1024 * 1024)
 #endif
 
 static int k230_boot_check_and_get_plain_data(firmware_head_s* pfh, ulong* pplain_addr);
