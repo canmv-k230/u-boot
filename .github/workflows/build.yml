@@ -91,8 +91,8 @@ jobs:
             make -j$(nproc) -C ${SDK_UBOOT_BUILD_DIR} || exit $?
 
             # Also copy artifacts to artifacts folder
-            cp ${SDK_UBOOT_BUILD_DIR}/u-boot.bin ~/artifacts/${UBOOT_DEFCONFIG}/u-boot.bin || echo "u-boot.bin missing"
-            cp ${SDK_UBOOT_BUILD_DIR}/spl/u-boot-spl.bin ~/artifacts/${UBOOT_DEFCONFIG}/u-boot-spl.bin || echo "u-boot-spl.bin missing"
+            cp ${SDK_UBOOT_BUILD_DIR}/u-boot.bin ~/artifacts/${base_name}/u-boot.bin || echo "u-boot.bin missing"
+            cp ${SDK_UBOOT_BUILD_DIR}/spl/u-boot-spl.bin ~/artifacts/${base_name}/u-boot-spl.bin || echo "u-boot-spl.bin missing"
           done
 
           # build fastboot uboot
@@ -109,13 +109,13 @@ jobs:
             # Setup output directories
             export SDK_UBOOT_BUILD_DIR=$HOME/build/${base_name}
             mkdir -p ${SDK_UBOOT_BUILD_DIR}
-            mkdir -p ~/artifacts/${base_name}
+            #mkdir -p ~/artifacts/${base_name}
 
             # Build
             make ${UBOOT_DEFCONFIG} O=${SDK_UBOOT_BUILD_DIR} || exit $?
             make -j$(nproc) -C ${SDK_UBOOT_BUILD_DIR} || exit $?
 
-            cp ${SDK_UBOOT_BUILD_DIR}/spl/u-boot-spl.bin ~/artifacts/${UBOOT_DEFCONFIG}/u-boot-spl-fastboot.bin || echo "u-boot-spl.bin missing"
+            cp ${SDK_UBOOT_BUILD_DIR}/spl/u-boot-spl.bin ~/artifacts/${base_name}/u-boot-spl-fastboot.bin || echo "u-boot-spl.bin missing"
           done
 
       - uses: actions/upload-artifact@v4
