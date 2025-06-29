@@ -19,6 +19,12 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Get Git revision and set as environment variable
+        id: get_revision
+        run: |
+          revision=$(git describe --long --tag --dirty --always)
+          echo "REVISION=$revision" >> $GITHUB_ENV
+
       - name: Setup SSH
         run: |
           git config --global user.name kendryte747
