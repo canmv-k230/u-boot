@@ -16,8 +16,21 @@ jobs:
         shell: bash
 
     steps:
-      - name: Checkout code
+      - name: Checkout RTOS SDK
         uses: actions/checkout@v4
+        with:
+          repository: https://github.com/kendryte/k230_rtos_sdk
+
+      - name: Checkout Uboot
+        uses: actions/checkout@v4
+        with:
+          repository: https://github.com/canmv-k230/u-boot
+          path: src/uboot/uboot
+
+      - name: List Code
+        run: |
+          ls -alth
+          tree -L 3
 
       - name: Setup SSH
         run: |
@@ -58,7 +71,7 @@ jobs:
             k230d_canmv_atk_dnk230d_defconfig
             k230_canmv_dongshanpi_defconfig
           )
-          
+
           pwd
           ls -alth
 
@@ -73,8 +86,8 @@ jobs:
             mkdir -p ~/artifacts/${UBOOT_DEFCONFIG}
 
             # Build
-            make ${UBOOT_DEFCONFIG} O=${SDK_UBOOT_BUILD_DIR} || exit $?
-            make -j$(nproc) -C ${SDK_UBOOT_BUILD_DIR} || exit $?
+            make ${UBOOT_DEFCONFIG} || exit $?
+            make uboot || exit $?
 
             # Also copy artifacts to artifacts folder
             cp ${SDK_UBOOT_BUILD_DIR}/u-boot.bin ~/artifacts/${UBOOT_DEFCONFIG}/u-boot.bin || echo "u-boot.bin missing"
