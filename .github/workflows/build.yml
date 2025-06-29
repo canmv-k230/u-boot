@@ -112,8 +112,9 @@ jobs:
             mkdir -p ${SDK_UBOOT_BUILD_DIR}
             mkdir -p ~/artifacts/${UBOOT_DEFCONFIG}
 
-            make ${UBOOT_DEFCONFIG} || exit $?
-            make uboot || exit $?
+            # Build
+            make ${UBOOT_DEFCONFIG} O=${SDK_UBOOT_BUILD_DIR} || exit $?
+            make -j$(nproc) -C ${SDK_UBOOT_BUILD_DIR} || exit $?
 
             cp ${SDK_UBOOT_BUILD_DIR}/spl/u-boot-spl.bin ~/artifacts/${UBOOT_DEFCONFIG}/u-boot-spl-fastboot.bin || echo "u-boot-spl.bin missing"
           done
