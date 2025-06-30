@@ -73,6 +73,7 @@ jobs:
             k230_canmv_defconfig
             k230_canmv_01studio_defconfig
             k230_canmv_dongshanpi_defconfig
+            k230_canmv_rtt_evb_defconfig
             k230_canmv_lckfb_defconfig
             k230_canmv_v3p0_defconfig
             k230_evb_defconfig
