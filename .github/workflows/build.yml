@@ -24,6 +24,7 @@ jobs:
       - name: Get Git revision and set as environment variable
         id: get_revision
         run: |
+          cd ${{ github.workspace }}/uboot
           revision=$(git describe --long --tag --dirty --always)
           echo "REVISION=$revision" >> $GITHUB_ENV
 
