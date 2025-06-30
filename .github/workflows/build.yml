@@ -20,6 +20,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           path: uboot
+          fetch-depth: 1
 
       - name: Get Git revision and set as environment variable
         id: get_revision
@@ -27,6 +28,14 @@ jobs:
           cd ${{ github.workspace }}/uboot
           revision=$(git describe --long --tag --dirty --always)
           echo "REVISION=$revision" >> $GITHUB_ENV
+
+      - name: Setup SSH
+        run: |
+          git config --global user.name kendryte747
+          git config --global user.email kendryte747@gmail.com
+          mkdir -p ~/.ssh
+          echo "${{ secrets.ACTIONS_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
 
       - name: Prepare Environment
         run: |
@@ -132,10 +141,9 @@ jobs:
         with:
           repository: kendryte/k230_rtos_sdk
           path: rtos_sdk
+          fetch-depth: 1
 
       - name: Install Prebuilt u-boot
-        env:
-          GIT_TOKEN: ${{ secrets.ACTIONS_PRIVATE_TOKENS }}
         run: |
           # Capture the U-Boot commit hash
           cd ${{ github.workspace }}/uboot
@@ -153,13 +161,11 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-          # Update Git remote to use your token for authentication
-          git remote set-url origin https://x-access-token:${GIT_TOKEN}@github.com/kendryte/k230_rtos_sdk.git
-
           git add boards
           git commit -m "Update prebuilt u-boot from https://github.com/canmv-k230/u-boot/commit/${UBOOT_COMMIT}"
 
-          # Push using token-authenticated HTTPS
+          # Push using token-authenticated ssh
+          git remote set-url origin git@github.com:kendryte/k230_rtos_sdk.git
           git push origin HEAD
 
       - name: Clean up SSH private key
