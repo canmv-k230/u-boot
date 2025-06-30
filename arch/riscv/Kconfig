@@ -57,6 +57,10 @@ config TARGET_K230_CANMV_DONGSHANPI
 	bool "Support k230_CANMV(dongshanpi)"
 	select SYS_CACHE_SHIFT_6	
 
+config TARGET_K230_CANMV_RTT_EVB
+	bool "Support k230_CANMV(rtt_evb)"
+	select SYS_CACHE_SHIFT_6
+
 config TARGET_K230_BURNTOOL
 	bool "Support k230 chip burn"
 	select SYS_CACHE_SHIFT_6
@@ -127,6 +131,7 @@ source "board/kendryte/k230d_canmv_bpi_zero/Kconfig"
 source "board/kendryte/k230d_canmv_junroc_ai_cam/Kconfig"
 source "board/kendryte/k230_canmv_v3p0/Kconfig"
 source "board/kendryte/k230_canmv_dongshanpi/Kconfig"
+source "board/kendryte/k230_canmv_rtt_evb/Kconfig"
 source "board/kendryte/k230_aihardware/Kconfig"
 source "board/kendryte/k230d_canmv_atk_dnk230d/Kconfig"
 source "board/kendryte/k230_evb/Kconfig"
