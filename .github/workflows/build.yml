@@ -18,6 +18,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          path: uboot
 
       - name: Get Git revision and set as environment variable
         id: get_revision
@@ -59,14 +61,15 @@ jobs:
 
       - name: Build Prebuilt u-boot
         run: |
+          cd ${{ github.workspace }}/uboot
           source ~/.canmv_venv/bin/activate
           export ARCH=riscv
           export CROSS_COMPILE=$HOME/.kendryte/Xuantie-900-gcc-linux-5.10.4-glibc-x86_64-V2.6.0/bin/riscv64-unknown-linux-gnu-
 
           defconfigs=(
             k230_aihardware_defconfig
-            k230_canmv_01studio_defconfig
             k230_canmv_defconfig
+            k230_canmv_01studio_defconfig
             k230_canmv_dongshanpi_defconfig
             k230_canmv_lckfb_defconfig
             k230_canmv_v3p0_defconfig
@@ -76,7 +79,6 @@ jobs:
             k230d_canmv_atk_dnk230d_defconfig
             k230d_canmv_bpi_zero_defconfig
             k230d_canmv_junroc_ai_cam_defconfig
-            k230d_evb_defconfig
             k230d_labplus_ai_camera_defconfig
           )
 
@@ -131,6 +133,31 @@ jobs:
           path: ~/artifacts
           if-no-files-found: error
           compression-level: 0
+
+      - name: Checkout RTOS SDK
+        uses: actions/checkout@v4
+        with:
+          repository: kendryte/k230_rtos_sdk
+          path: rtos_sdk
+
+      - name: Install Prebuilt u-boot
+        run: |
+          # Capture the U-Boot commit hash
+          cd ${{ github.workspace }}/uboot
+          UBOOT_COMMIT=$(git rev-parse HEAD)
+
+          # Install prebuilt artifacts into rtos_sdk/boards
+          python3 .github/workflows/install_uboot_artifacts.py \
+            --source ~/artifacts \
+            --target ${{ github.workspace }}/rtos_sdk/boards
+
+          # Commit the installed files to RTOS SDK
+          cd ${{ github.workspace }}/rtos_sdk
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add boards
+          git commit -m "Update prebuilt u-boot from https://github.com/canmv-k230/u-boot/commit/${UBOOT_COMMIT}"
+          git push
 
       - name: Clean up SSH private key
         if: always()
