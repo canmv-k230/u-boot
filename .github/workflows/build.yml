@@ -36,7 +36,7 @@ jobs:
       - name: Install repo tool
         run: |
           mkdir -p ~/bin
-          curl -o ~/bin/repo curl https://storage.googleapis.com/git-repo-downloads/repo
+          curl -o ~/bin/repo https://storage.googleapis.com/git-repo-downloads/repo
           chmod a+x ~/bin/repo
           echo "$HOME/bin" >> $GITHUB_PATH
 
