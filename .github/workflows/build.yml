@@ -71,10 +71,10 @@ jobs:
       - name: Download toolchains
         if: steps.cache-toolchain.outputs.cache-hit != 'true'
         run: |
-          mkdir -p ~/.kendryte
+          mkdir -p ~/.kendryte/k230_toolchains
           wget -q https://github.com/kendryte/canmv_k230/releases/download/v1.1/Xuantie-900-gcc-linux-5.10.4-glibc-x86_64-V2.6.0.tar.bz2 -O /tmp/toolchain.tar.bz2
-          tar -xjf /tmp/toolchain.tar.bz2 -C ~/.kendryte
-          ls -alth ~/.kendryte
+          tar -xjf /tmp/toolchain.tar.bz2 -C ~/.kendryte/k230_toolchains
+          ls -alth ~/.kendryte/k230_toolchains
 
       - name: Build Prebuilt u-boot
         run: |
