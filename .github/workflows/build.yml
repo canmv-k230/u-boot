@@ -109,8 +109,8 @@ jobs:
             make uboot || exit $?
 
             # Also copy artifacts to artifacts folder
-            cp ${{ github.workspace }}/output/${UBOOT_DEFCONFIG}/uboot/u-boot.bin ~/artifacts/${base_name}/u-boot.bin || echo "u-boot.bin missing"
-            cp ${{ github.workspace }}/output/${UBOOT_DEFCONFIG}/uboot/spl/u-boot-spl.bin ~/artifacts/${base_name}/u-boot-spl.bin || echo "u-boot-spl.bin missing"
+            cp ${{ github.workspace }}/canmv_k230/output/${UBOOT_DEFCONFIG}/uboot/u-boot.bin ~/artifacts/${base_name}/u-boot.bin || echo "u-boot.bin missing" || exit $?
+            cp ${{ github.workspace }}/canmv_k230/output/${UBOOT_DEFCONFIG}/uboot/spl/u-boot-spl.bin ~/artifacts/${base_name}/u-boot-spl.bin || echo "u-boot-spl.bin missing" || exit $?
           done
 
           for UBOOT_DEFCONFIG in "${defconfigs[@]}"; do
@@ -123,7 +123,7 @@ jobs:
             make ${UBOOT_DEFCONFIG} || exit $?
             make uboot || exit $?
 
-            cp ${{ github.workspace }}/output/${UBOOT_DEFCONFIG}/uboot/spl/u-boot-spl.bin ~/artifacts/${base_name}/u-boot-spl-fastboot.bin || echo "u-boot-spl.bin missing"; exit $?
+            cp ${{ github.workspace }}/canmv_k230/output/${UBOOT_DEFCONFIG}/uboot/spl/u-boot-spl.bin ~/artifacts/${base_name}/u-boot-spl-fastboot.bin || echo "u-boot-spl.bin missing"; exit $?
           done
 
       - uses: actions/upload-artifact@v4
@@ -141,13 +141,13 @@ jobs:
           cd ${{ github.workspace }}/canmv_k230/src/uboot/uboot
           UBOOT_COMMIT=$(git rev-parse HEAD)
 
-          # Install prebuilt artifacts into rtos_sdk/boards
+          # Install prebuilt artifacts into canmv_k230/boards
           python3 .github/workflows/install_uboot_artifacts.py \
             --source ~/artifacts \
-            --target ${{ github.workspace }}/rtos_sdk/boards
+            --target ${{ github.workspace }}/canmv_k230/boards
 
-          # Commit the installed files to RTOS SDK
-          cd ${{ github.workspace }}/rtos_sdk
+          # Commit the installed files to CanMV K230 repository
+          cd ${{ github.workspace }}/canmv_k230
 
           # Set up Git identity
           git config user.name "github-actions[bot]"
