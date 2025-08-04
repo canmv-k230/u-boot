@@ -24,34 +24,42 @@ jobs:
           echo "${{ secrets.ACTIONS_PRIVATE_KEY }}" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
 
-      - name: Checkout RTOS SDK
-        uses: actions/checkout@v4
-        with:
-          repository: kendryte/k230_rtos_sdk
-          path: ${{ github.workspace }}/rtos_sdk
-          fetch-depth: 1
-
-      - name: Checkout code
-        uses: actions/checkout@v4
-        with:
-          path: ${{ github.workspace }}/rtos_sdk/src/uboot/uboot
-          fetch-depth: 1
-
-      - name: Get Git revision and set as environment variable
-        id: get_revision
-        run: |
-          cd ${{ github.workspace }}/rtos_sdk/src/uboot/uboot
-          revision=$(git describe --long --tag --dirty --always)
-          echo "REVISION=$revision" >> $GITHUB_ENV
-
       - name: Prepare Environment
         run: |
           sudo apt update
           sudo apt install -y build-essential bison flex gcc libncurses5-dev \
-            libssl-dev pkg-config python3 python3-pip python-is-python3 python3-venv
+            libssl-dev pkg-config python3 python3-pip python-is-python3 python3-venv curl git
           python3 -m venv ~/.canmv_venv
           source ~/.canmv_venv/bin/activate
           pip3 install pycryptodome gmssl jsonschema jinja2
+
+      - name: Install repo tool
+        run: |
+          mkdir -p ~/bin
+          curl -o ~/bin/repo curl https://storage.googleapis.com/git-repo-downloads/repo
+          chmod a+x ~/bin/repo
+          echo "$HOME/bin" >> $GITHUB_PATH
+
+      - name: Init repo
+        run: |
+          mkdir ${{ github.workspace }}/canmv_k230
+          cd ${{ github.workspace }}/canmv_k230
+          repo init -u https://github.com/canmv-k230/manifest \
+                    -b master \
+                    --repo-url=https://github.com/canmv-k230/git-repo.git \
+                    --repo-branch stable
+
+      - name: Sync repo
+        run: |
+          cd ${{ github.workspace }}/canmv_k230
+          repo sync -j$(nproc)
+
+      - name: Get Git revision and set as environment variable
+        id: get_revision
+        run: |
+          cd ${{ github.workspace }}/canmv_k230/src/uboot/uboot
+          revision=$(git describe --long --tag --dirty --always)
+          echo "REVISION=$revision" >> $GITHUB_ENV
 
       - name: Cache RISC-V Toolchain
         id: cache-toolchain
@@ -70,7 +78,8 @@ jobs:
 
       - name: Build Prebuilt u-boot
         run: |
-          cd ${{ github.workspace }}/rtos_sdk
+          cd ${{ github.workspace }}/canmv_k230
+          mkdir -p ~/artifacts
           source ~/.canmv_venv/bin/activate
 
           defconfigs=(
@@ -128,7 +137,7 @@ jobs:
         if: github.ref != 'refs/heads/dev'
         run: |
           # Capture the U-Boot commit hash
-          cd ${{ github.workspace }}/uboot
+          cd ${{ github.workspace }}/canmv_k230/src/uboot/uboot
           UBOOT_COMMIT=$(git rev-parse HEAD)
 
           # Install prebuilt artifacts into rtos_sdk/boards
