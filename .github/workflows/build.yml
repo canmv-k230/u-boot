@@ -105,6 +105,8 @@ jobs:
             echo " Building U-Boot: ${UBOOT_DEFCONFIG}"
             echo "=============================="
 
+            base_name=${UBOOT_DEFCONFIG%_defconfig}
+
             make ${UBOOT_DEFCONFIG} || exit $?
             make uboot || exit $?
 
@@ -117,6 +119,8 @@ jobs:
             echo "=============================="
             echo " Building U-Boot With Fastboot: ${UBOOT_DEFCONFIG}"
             echo "=============================="
+
+            base_name=${UBOOT_DEFCONFIG%_defconfig}
 
             echo "CONFIG_UBOOT_ENABLE_FAST_BOOT=y" >> ${{ github.workspace }}/canmv_k230/configs/${UBOOT_DEFCONFIG}
             echo "CONFIG_UBOOT_FAST_BOOT_RTSMART=y" >> ${{ github.workspace }}/canmv_k230/configs/${UBOOT_DEFCONFIG}
