@@ -77,6 +77,7 @@ jobs:
           ls -alth ~/.kendryte/k230_toolchains
 
       - name: Build Prebuilt u-boot
+        shell: bash
         run: |
           cd ${{ github.workspace }}/canmv_k230
           mkdir -p ~/artifacts
@@ -127,7 +128,6 @@ jobs:
             cp ${{ github.workspace }}/canmv_k230/output/${UBOOT_DEFCONFIG}/uboot/spl/u-boot-spl.bin ~/artifacts/${base_name}/u-boot-spl-fastboot.bin || echo "u-boot-spl-fastboot missing"; exit $?
           done
 
-          ls -alth ~/artifacts
           tree ~/artifacts
 
       - uses: actions/upload-artifact@v4
