@@ -109,6 +109,7 @@ jobs:
             mkdir -p ~/artifacts/${base_name}
 
             make ${UBOOT_DEFCONFIG} || exit $?
+            sed -i '/^CONFIG_UBOOT_USE_PREBUILT=y$/d' ${{ github.workspace }}/canmv_k230/.config
             make uboot || exit $?
 
             # Also copy artifacts to artifacts folder
@@ -119,6 +120,7 @@ jobs:
             make uboot-clean || exit $?
             echo "CONFIG_UBOOT_ENABLE_FAST_BOOT=y" >> ${{ github.workspace }}/canmv_k230/.config
             echo "CONFIG_UBOOT_FAST_BOOT_RTSMART=y" >> ${{ github.workspace }}/canmv_k230/.config
+            sed -i '/^CONFIG_UBOOT_USE_PREBUILT=y$/d' ${{ github.workspace }}/canmv_k230/.config
 
             make uboot || exit $?
 
