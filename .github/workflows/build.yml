@@ -118,8 +118,8 @@ jobs:
             echo " Building U-Boot With Fastboot: ${UBOOT_DEFCONFIG}"
             echo "=============================="
 
-            echo "CONFIG_UBOOT_ENABLE_FAST_BOOT=y" >> ${{ github.workspace }}/rtos_sdk/configs/${UBOOT_DEFCONFIG}
-            echo "CONFIG_UBOOT_FAST_BOOT_RTSMART=y" >> ${{ github.workspace }}/rtos_sdk/configs/${UBOOT_DEFCONFIG}
+            echo "CONFIG_UBOOT_ENABLE_FAST_BOOT=y" >> ${{ github.workspace }}/canmv_k230/configs/${UBOOT_DEFCONFIG}
+            echo "CONFIG_UBOOT_FAST_BOOT_RTSMART=y" >> ${{ github.workspace }}/canmv_k230/configs/${UBOOT_DEFCONFIG}
             make ${UBOOT_DEFCONFIG} || exit $?
             make uboot || exit $?
 
