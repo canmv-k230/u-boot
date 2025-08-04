@@ -117,8 +117,8 @@ jobs:
             make uboot || exit $?
 
             # Also copy artifacts to artifacts folder
-            cp ${{ github.workspace }}/canmv_k230/output/${UBOOT_DEFCONFIG}/uboot/u-boot.bin ~/artifacts/${base_name}/u-boot.bin || echo "u-boot.bin missing"; exit $?
-            cp ${{ github.workspace }}/canmv_k230/output/${UBOOT_DEFCONFIG}/uboot/spl/u-boot-spl.bin ~/artifacts/${base_name}/u-boot-spl.bin || echo "u-boot-spl.bin missing"; exit $?
+            cp ${{ github.workspace }}/canmv_k230/output/${UBOOT_DEFCONFIG}/uboot/u-boot.bin ~/artifacts/${base_name}/u-boot.bin || { echo "u-boot.bin missing"; exit $? }
+            cp ${{ github.workspace }}/canmv_k230/output/${UBOOT_DEFCONFIG}/uboot/spl/u-boot-spl.bin ~/artifacts/${base_name}/u-boot-spl.bin || { echo "u-boot-spl.bin missing"; exit $? }
 
             # build fastboot spl
             make uboot-clean || exit $?
@@ -129,7 +129,7 @@ jobs:
 
             make uboot || exit $?
 
-            cp ${{ github.workspace }}/canmv_k230/output/${UBOOT_DEFCONFIG}/uboot/spl/u-boot-spl.bin ~/artifacts/${base_name}/u-boot-spl-fastboot.bin || echo "u-boot-spl-fastboot missing"; exit $?
+            cp ${{ github.workspace }}/canmv_k230/output/${UBOOT_DEFCONFIG}/uboot/spl/u-boot-spl.bin ~/artifacts/${base_name}/u-boot-spl-fastboot.bin || { echo "u-boot-spl-fastboot missing"; exit $? }
           done
 
           tree ~/artifacts
@@ -156,6 +156,9 @@ jobs:
 
           # Commit the installed files to CanMV K230 repository
           cd ${{ github.workspace }}/canmv_k230
+
+          # Ensure we are on the main branch
+          git checkout main
 
           # Set up Git identity
           git config user.name "github-actions[bot]"
