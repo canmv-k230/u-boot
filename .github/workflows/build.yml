@@ -85,19 +85,19 @@ jobs:
 
           defconfigs=(
             k230_rtos_aihardware_defconfig
-            k230_canmv_v1p0p1_defconfig
-            k230_canmv_01studio_defconfig
-            k230_canmv_dongshanpi_defconfig
-            k230_canmv_lckfb_defconfig
-            k230_canmv_rtt_evb_defconfig
-            k230_canmv_v3p0_defconfig
-            k230_rtos_evb_defconfig
-            k230_rtos_evb_spinand_defconfig
-            k230_canmv_labplus_1956_defconfig
-            k230d_canmv_atk_dnk230d_defconfig
-            k230d_canmv_bpi_zero_defconfig
-            k230d_canmv_junroc_ai_cam_defconfig
-            k230d_canmv_labplus_ai_camera_defconfig
+            # k230_canmv_v1p0p1_defconfig
+            # k230_canmv_01studio_defconfig
+            # k230_canmv_dongshanpi_defconfig
+            # k230_canmv_lckfb_defconfig
+            # k230_canmv_rtt_evb_defconfig
+            # k230_canmv_v3p0_defconfig
+            # k230_rtos_evb_defconfig
+            # k230_rtos_evb_spinand_defconfig
+            # k230_canmv_labplus_1956_defconfig
+            # k230d_canmv_atk_dnk230d_defconfig
+            # k230d_canmv_bpi_zero_defconfig
+            # k230d_canmv_junroc_ai_cam_defconfig
+            # k230d_canmv_labplus_ai_camera_defconfig
           )
 
           for UBOOT_DEFCONFIG in "${defconfigs[@]}"; do
@@ -115,6 +115,10 @@ jobs:
             cp ${{ github.workspace }}/canmv_k230/output/${UBOOT_DEFCONFIG}/uboot/spl/u-boot-spl.bin ~/artifacts/${base_name}/u-boot-spl.bin || echo "u-boot-spl.bin missing" || exit $?
           done
 
+          rm -rf ${{ github.workspace }}/canmv_k230/output/*
+          ls -alth ~/artifacts
+          tree ~/artifacts
+
           for UBOOT_DEFCONFIG in "${defconfigs[@]}"; do
             echo "=============================="
             echo " Building U-Boot With Fastboot: ${UBOOT_DEFCONFIG}"
@@ -127,7 +131,7 @@ jobs:
             make ${UBOOT_DEFCONFIG} || exit $?
             make uboot || exit $?
 
-            cp ${{ github.workspace }}/canmv_k230/output/${UBOOT_DEFCONFIG}/uboot/spl/u-boot-spl.bin ~/artifacts/${base_name}/u-boot-spl-fastboot.bin || echo "u-boot-spl.bin missing"; exit $?
+            cp ${{ github.workspace }}/canmv_k230/output/${UBOOT_DEFCONFIG}/uboot/spl/u-boot-spl.bin ~/artifacts/${base_name}/u-boot-spl-fastboot.bin || echo "u-boot-spl-fastboot missing"; exit $?
           done
 
       - uses: actions/upload-artifact@v4
