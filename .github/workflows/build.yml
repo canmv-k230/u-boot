@@ -65,7 +65,7 @@ jobs:
         id: cache-toolchain
         uses: actions/cache@v4
         with:
-          path: ~/.kendryte/Xuantie-900-gcc-linux-5.10.4-glibc-x86_64-V2.6.0/
+          path: ~/.kendryte/k230_toolchains/Xuantie-900-gcc-linux-5.10.4-glibc-x86_64-V2.6.0/
           key: k230-toolchain-v2.6.0
 
       - name: Download toolchains
