@@ -83,29 +83,29 @@ jobs:
           source ~/.canmv_venv/bin/activate
           export SKIP_TOOLCHAIN_CHECK=1
 
-          defconfigs=(
-            k230_rtos_aihardware_defconfig
-            k230_canmv_v1p0p1_defconfig
-            k230_canmv_01studio_defconfig
-            k230_canmv_dongshanpi_defconfig
-            k230_canmv_lckfb_defconfig
-            k230_canmv_rtt_evb_defconfig
-            k230_canmv_v3p0_defconfig
-            k230_rtos_evb_defconfig
-            k230_rtos_evb_spinand_defconfig
-            k230_canmv_labplus_1956_defconfig
-            k230d_canmv_atk_dnk230d_defconfig
-            k230d_canmv_bpi_zero_defconfig
-            k230d_canmv_junroc_ai_cam_defconfig
-            k230d_canmv_labplus_ai_camera_defconfig
+          declare -A defconfig_to_board=(
+            [k230_rtos_aihardware_defconfig]="k230_aihardware"
+            [k230_canmv_v1p0p1_defconfig]="k230_canmv"
+            [k230_canmv_01studio_defconfig]="k230_canmv_01studio"
+            [k230_canmv_dongshanpi_defconfig]="k230_canmv_dongshanpi"
+            [k230_canmv_lckfb_defconfig]="k230_canmv_lckfb"
+            [k230_canmv_rtt_evb_defconfig]="k230_canmv_rtt_evb"
+            [k230_canmv_v3p0_defconfig]="k230_canmv_v3p0"
+            [k230_rtos_evb_defconfig]="k230_evb"
+            [k230_rtos_evb_spinand_defconfig]="k230_evb_spinand"
+            [k230_canmv_labplus_1956_defconfig]="k230_labplus_1956"
+            [k230d_canmv_atk_dnk230d_defconfig]="k230d_canmv_atk_dnk230d"
+            [k230d_canmv_bpi_zero_defconfig]="k230d_canmv_bpi_zero"
+            [k230d_canmv_junroc_ai_cam_defconfig]="k230d_canmv_junroc_ai_cam"
+            [k230d_canmv_labplus_ai_camera_defconfig]="k230d_labplus_ai_camera"
           )
 
-          for UBOOT_DEFCONFIG in "${defconfigs[@]}"; do
+          for UBOOT_DEFCONFIG in "${!defconfig_to_board[@]}"; do
             echo "=============================="
             echo " Building U-Boot: ${UBOOT_DEFCONFIG}"
             echo "=============================="
 
-            base_name=${UBOOT_DEFCONFIG%_defconfig}
+            base_name=${defconfig_to_board[$UBOOT_DEFCONFIG]}
             mkdir -p ~/artifacts/${base_name}
 
             make ${UBOOT_DEFCONFIG} || exit $?
@@ -114,27 +114,19 @@ jobs:
             # Also copy artifacts to artifacts folder
             cp ${{ github.workspace }}/canmv_k230/output/${UBOOT_DEFCONFIG}/uboot/u-boot.bin ~/artifacts/${base_name}/u-boot.bin || echo "u-boot.bin missing"; exit $?
             cp ${{ github.workspace }}/canmv_k230/output/${UBOOT_DEFCONFIG}/uboot/spl/u-boot-spl.bin ~/artifacts/${base_name}/u-boot-spl.bin || echo "u-boot-spl.bin missing"; exit $?
-          done
 
-          rm -rf ${{ github.workspace }}/canmv_k230/output/*
-          ls -alth ~/artifacts
-          tree ~/artifacts
+            # build fastboot spl
+            make uboot-clean || exit $?
+            echo "CONFIG_UBOOT_ENABLE_FAST_BOOT=y" >> ${{ github.workspace }}/canmv_k230/.config
+            echo "CONFIG_UBOOT_FAST_BOOT_RTSMART=y" >> ${{ github.workspace }}/canmv_k230/.config
 
-          for UBOOT_DEFCONFIG in "${defconfigs[@]}"; do
-            echo "=============================="
-            echo " Building U-Boot With Fastboot: ${UBOOT_DEFCONFIG}"
-            echo "=============================="
-
-            base_name=${UBOOT_DEFCONFIG%_defconfig}
-            mkdir -p ~/artifacts/${base_name}
-
-            echo "CONFIG_UBOOT_ENABLE_FAST_BOOT=y" >> ${{ github.workspace }}/canmv_k230/configs/${UBOOT_DEFCONFIG}
-            echo "CONFIG_UBOOT_FAST_BOOT_RTSMART=y" >> ${{ github.workspace }}/canmv_k230/configs/${UBOOT_DEFCONFIG}
-            make ${UBOOT_DEFCONFIG} || exit $?
             make uboot || exit $?
 
             cp ${{ github.workspace }}/canmv_k230/output/${UBOOT_DEFCONFIG}/uboot/spl/u-boot-spl.bin ~/artifacts/${base_name}/u-boot-spl-fastboot.bin || echo "u-boot-spl-fastboot missing"; exit $?
           done
+
+          ls -alth ~/artifacts
+          tree ~/artifacts
 
       - uses: actions/upload-artifact@v4
         if: github.ref != 'refs/heads/dev'
