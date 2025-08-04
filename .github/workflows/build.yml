@@ -81,6 +81,7 @@ jobs:
           cd ${{ github.workspace }}/canmv_k230
           mkdir -p ~/artifacts
           source ~/.canmv_venv/bin/activate
+          export SKIP_TOOLCHAIN_CHECK=1
 
           defconfigs=(
             k230_rtos_aihardware_defconfig
