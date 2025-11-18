@@ -35,6 +35,8 @@
 
 #include "k230_gpio.h"
 
+#include <stdint.h>
+
 // Fallback definition or other code
 #ifndef MYHEADER_EXISTS
 // Provide alternative definitions or inform about missing header
@@ -47,10 +49,6 @@
 
 #if !defined (CONFIG_RTSMART_OPENSIB_MEMORY_SIZE)
 #define CONFIG_RTSMART_OPENSIB_MEMORY_SIZE 0x20000
-#endif
-
-#if !defined(CONFIG_MEM_TOTAL_SIZE)
-#define CONFIG_MEM_TOTAL_SIZE (128 * 1024 * 1024)
 #endif
 
 typedef enum {
@@ -119,6 +117,8 @@ typedef enum _en___boot_type {
 #define INVALID_LOAD_ADDR 0xFFFFFFFF
 
 extern int g_boot_medium;
+extern uint64_t g_dram_base;
+extern uint64_t g_dram_size;
 
 unsigned long k230_get_encrypted_image_load_addr(void);
 unsigned long k230_get_encrypted_image_decrypt_addr(void);
@@ -136,6 +136,6 @@ int  spl_load_image_type(void);
 
 int k230_gpio(char opt, int pin, char* value);
 
-u32 detect_ddr_size(void);
+uint64_t detect_ddr_size(void);
 
 #endif

@@ -44,22 +44,11 @@
 #include <stdint.h>
 #include <stdio.h>
 
+#include "board_common.h"
+
 #include "k230_atag.h"
 
 #include "kendryte/pufs/pufs_hmac/pufs_hmac.h"
-
-#ifdef CONFIG_AUTO_DETECT_DDR_SIZE
-    #include <asm/global_data.h>
-    DECLARE_GLOBAL_DATA_PTR;
-
-    #ifndef CONFIG_MEM_TOTAL_SIZE
-        #define CONFIG_MEM_TOTAL_SIZE (gd->ram_size)
-    #endif
-#else
-    #define CONFIG_MEM_TOTAL_SIZE (128 * 1024 * 1024)
-#endif
-
-#include "board_common.h"
 
 /* TOC (Table of Contents) 定义 */
 #define K230_TOC_OFFSET        0xe0000
@@ -88,17 +77,17 @@ struct k230_toc {
 
 static struct k230_toc toc;
 static struct blk_desc *pblk_desc;
-static uint64_t rtapp_load_addr, rtapp_size;
+static uint64_t rtapp_load_addr, rtapp_size, rttapp_loaded = 0;
 
 unsigned long k230_get_encrypted_image_load_addr(void)
 {
-    unsigned long addr = CONFIG_MEM_BASE_ADDR + CONFIG_MEM_TOTAL_SIZE - ((CONFIG_MEM_TOTAL_SIZE / 3) * 2);
+    unsigned long addr = g_dram_base + g_dram_size - ((g_dram_size / 3) * 2);
     return addr & ~(4096-1);
 }
 
 unsigned long k230_get_rttapp_load_addr(void)
 {
-    unsigned long addr = CONFIG_MEM_BASE_ADDR + CONFIG_MEM_TOTAL_SIZE - (CONFIG_MEM_TOTAL_SIZE / 3);
+    unsigned long addr = g_dram_base + g_dram_size - (g_dram_size / 3);
     return addr & ~(4096-1);
 }
 
@@ -562,6 +551,13 @@ static uint _k230_load_img(uint64_t offset)
         rtapp_size = dst_len;
         rtapp_load_addr = k230_get_rttapp_load_addr();
         image_set_load(pUh, rtapp_load_addr);
+
+        if((rtapp_load_addr + rtapp_size) > g_dram_size) {
+            printf("rtapp too large\n");
+            return INVALID_LOAD_ADDR;
+        }
+
+        rttapp_loaded = 1;
     }
 
     ret = k230_boot_decomp_to_load_addr(pUh, dst_len, src_data, &src_len);
@@ -630,8 +626,10 @@ static void k230_boot_core(int core, ulong run_addr)
 static void k230_setup_user_tag(void)
 {
     setup_start_tag();
-    setup_k230_ddr_size_tag(gd->ram_size);
-    setup_k230_rtapp_tag(rtapp_size, rtapp_load_addr);
+    setup_k230_ddr_size_tag(g_dram_size);
+    if(rttapp_loaded) {
+        setup_k230_rtapp_tag(rtapp_size, rtapp_load_addr);
+    }
     setup_end_tag();
 }
 
