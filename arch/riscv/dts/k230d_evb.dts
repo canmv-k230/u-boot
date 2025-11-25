@@ -50,13 +50,10 @@
 	status = "okay";
 	max-frequency = <52000000>;
 };
+
 &mmc1 {
 	status = "okay";
 	max-frequency = <52000000>;
-};
-
-&usbotg0 {
-	status = "okay";
 };
 
 &iomux {
@@ -109,14 +106,13 @@
 
 		(IO25) ( 0<<SEL | 0<<SL | BANK_VOLTAGE_IO14_IO25<<MSC | 1<<IE | 1<<OE | 0<<PU | 0<<PD | 7<<DS | 1<<ST )
 
-		// PDMCLK
-		(IO26) ( 3<<SEL | 0<<SL | BANK_VOLTAGE_IO26_IO37<<MSC | 0<<IE | 1<<OE | 0<<PU | 0<<PD | 7<<DS | 1<<ST )
-
-		(IO27) ( 0<<SEL | 0<<SL | BANK_VOLTAGE_IO26_IO37<<MSC | 1<<IE | 1<<OE | 0<<PU | 0<<PD | 7<<DS | 1<<ST )
-		(IO28) ( 0<<SEL | 0<<SL | BANK_VOLTAGE_IO26_IO37<<MSC | 1<<IE | 1<<OE | 0<<PU | 0<<PD | 7<<DS | 1<<ST )
-		(IO29) ( 0<<SEL | 0<<SL | BANK_VOLTAGE_IO26_IO37<<MSC | 1<<IE | 1<<OE | 0<<PU | 0<<PD | 7<<DS | 1<<ST )
-		(IO30) ( 0<<SEL | 0<<SL | BANK_VOLTAGE_IO26_IO37<<MSC | 1<<IE | 1<<OE | 0<<PU | 0<<PD | 7<<DS | 1<<ST )
-		(IO31) ( 0<<SEL | 0<<SL | BANK_VOLTAGE_IO26_IO37<<MSC | 1<<IE | 1<<OE | 0<<PU | 0<<PD | 7<<DS | 1<<ST )
+		// SD
+		(IO26) ( 1<<SEL | 0<<SL | BANK_VOLTAGE_IO26_IO37<<MSC | 0<<IE | 1<<OE | 0<<PU | 0<<PD | 7<<DS | 1<<ST )//clk
+		(IO27) ( 1<<SEL | 0<<SL | BANK_VOLTAGE_IO26_IO37<<MSC | 1<<IE | 1<<OE | 0<<PU | 0<<PD | 7<<DS | 1<<ST ) //cmd
+		(IO28) ( 1<<SEL | 0<<SL | BANK_VOLTAGE_IO26_IO37<<MSC | 1<<IE | 1<<OE | 0<<PU | 0<<PD | 7<<DS | 1<<ST ) //d0
+		(IO29) ( 1<<SEL | 0<<SL | BANK_VOLTAGE_IO26_IO37<<MSC | 1<<IE | 1<<OE | 0<<PU | 0<<PD | 7<<DS | 1<<ST )
+		(IO30) ( 1<<SEL | 0<<SL | BANK_VOLTAGE_IO26_IO37<<MSC | 1<<IE | 1<<OE | 0<<PU | 0<<PD | 7<<DS | 1<<ST )
+		(IO31) ( 1<<SEL | 0<<SL | BANK_VOLTAGE_IO26_IO37<<MSC | 1<<IE | 1<<OE | 0<<PU | 0<<PD | 7<<DS | 1<<ST ) //d3
 
 		// IIS
 		(IO32) ( 0<<SEL | 0<<SL | BANK_VOLTAGE_IO26_IO37<<MSC | 1<<IE | 1<<OE | 0<<PU | 0<<PD | 7<<DS | 1<<ST )
