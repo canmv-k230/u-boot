@@ -43,6 +43,10 @@ config TARGET_K230_CANMV_01STUDIO
 	bool "Support k230_CANMV(01STUDIO)"
 	select SYS_CACHE_SHIFT_6
 
+config TARGET_K230_CANMV_YAHBOOM
+	bool "Support k230_CANMV(YAHBOOM)"
+	select SYS_CACHE_SHIFT_6
+
 config TARGET_K230_CANMV_GT6700
 	bool "Support k230_CANMV(GT6700)"
 	select SYS_CACHE_SHIFT_6
@@ -131,6 +135,7 @@ source "board/kendryte/common/k230d/Kconfig"
 source "board/kendryte/k230_burntool/Kconfig"
 source "board/kendryte/k230_canmv/Kconfig"
 source "board/kendryte/k230_canmv_01studio/Kconfig"
+source "board/kendryte/k230_canmv_yahboom/Kconfig"
 source "board/kendryte/k230_canmv_gt6700/Kconfig"
 source "board/kendryte/k230d_canmv_bpi_zero/Kconfig"
 source "board/kendryte/k230d_canmv_junroc_ai_cam/Kconfig"
