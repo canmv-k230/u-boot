@@ -32,6 +32,11 @@ int ddr_init_training(void) {
 int board_early_init_f(void) {
   /* force set boot medium to sdio1 */
   g_boot_medium = BOOT_MEDIUM_SDIO1;
+
+  int pin = 48;
+  kd_pin_set_ddr(pin, 1); // Set pins to output mode
+  kd_pin_set_dr(pin, 0); // Set pins to low
+
   return 0;
 }
 
