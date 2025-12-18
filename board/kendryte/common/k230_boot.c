@@ -44,6 +44,8 @@
 #include <stdint.h>
 #include <stdio.h>
 
+#include <u-boot/crc.h>
+
 #include "board_common.h"
 
 #include "k230_atag.h"
@@ -53,11 +55,15 @@
 /* TOC (Table of Contents) 定义 */
 #define K230_TOC_OFFSET        0xe0000
 #define K230_TOC_SECTOR        (K230_TOC_OFFSET / 512)
-#define K230_TOC_MAX_ENTRIES   10
+#define K230_TOC_MAX_ENTRIES   16
 #define K230_TOC_ENTRY_SIZE    64
 
-#define K230_BOOT_CORE_NUM_SHIFT    (0x1)
-#define K230_BOOT_CORE_NUM_MASK     (0x3 << K230_BOOT_CORE_NUM_SHIFT) 
+#define OTA_META_MAGIC         0x4f544156u  /* 'OTAV' */
+
+#define K230_BOOT_CORE_SHIFT        (0x1)
+#define K230_BOOT_CORE_MASK         (0x3 << K230_BOOT_CORE_SHIFT) 
+#define K230_BOOT_FLAG_SHIFT        (0x0)
+#define K230_BOOT_FLAG_MASK         (0x1 << K230_BOOT_FLAG_SHIFT) 
 
 struct k230_toc_entry {
     char name[32];
@@ -65,10 +71,9 @@ struct k230_toc_entry {
     uint64_t size;
     uint8_t load;
     uint8_t boot;
-    uint8_t pading_1[2];
+    uint8_t pading[10];
     uint32_t load_addr;
-    uint8_t pading_2[4];
-} __attribute__((aligned(64)));
+} __attribute__((packed, aligned(64)));
 
 struct k230_toc {
 	uint32_t entry_count;
@@ -78,6 +83,14 @@ struct k230_toc {
 static struct k230_toc toc;
 static struct blk_desc *pblk_desc;
 static uint64_t rtapp_load_addr, rtapp_size, rttapp_loaded = 0;
+
+struct ota_slot_meta {
+    uint32_t magic;
+    uint32_t version;
+    uint32_t crc32;
+    uint32_t reserved;
+    uint8_t  padding[512 - 16];
+} __attribute__((packed));
 
 unsigned long k230_get_encrypted_image_load_addr(void)
 {
@@ -242,7 +255,8 @@ static void *k230_read_toc(void)
     memset(&toc, 0, sizeof(toc));
 
     if (K230_TOC_ENTRY_SIZE != sizeof(struct k230_toc_entry)) {
-        printf("%s: struct k230_toc_entry must aligned to 64B\n", __func__);
+        printf("%s: struct k230_toc_entry(%d) must aligned to 64B\n",
+               __func__, sizeof(struct k230_toc_entry));
         ret = -1;
         goto out;
     }
@@ -355,7 +369,7 @@ static void dump_toc_info(void)
 
 static int k230_parse_toc(void *toc_buf)
 {
-    struct k230_toc_entry *src = (u8 *)toc_buf;
+    struct k230_toc_entry *src = toc_buf;
 
 	toc.entry_count = 0;
 	for (int i = 0; i < K230_TOC_MAX_ENTRIES; i++) {
@@ -371,9 +385,150 @@ static int k230_parse_toc(void *toc_buf)
         src ++;
 	}
 
-    //dump_toc_info();
+#if 0
+    dump_toc_info();
+#endif
 
 	return (toc.entry_count > 0) ? 0 : -7;
+}
+
+static int k230_read_meta_block(ulong offset, void *buf)
+{
+#if defined(CONFIG_MMC)
+    if ((BOOT_MEDIUM_SDIO0 == g_boot_medium) ||
+        (BOOT_MEDIUM_SDIO1 == g_boot_medium)) {
+        lbaint_t sector;
+        lbaint_t cnt = 1;
+
+        sector = offset / pblk_desc->blksz;
+        if (blk_dread(pblk_desc, sector, cnt, buf) != cnt) {
+            printf("%s: read meta block fail, off=0x%lx\n",
+                   __func__, offset);
+            return -1;
+        }
+
+        return 0;
+    }
+#endif
+
+    return -1;
+}
+
+static ulong k230_get_ota_meta_offset(char slot)
+{
+    ulong base = 0;
+    ulong span = 0;
+
+    for (int i = 0; i < toc.entry_count; i++) {
+        struct k230_toc_entry *e = &toc.entries[i];
+
+        if (!strncmp(e->name, "ota_meta", sizeof(e->name))) {
+            base = (ulong)e->offset;
+            span = (ulong)e->size / 2;
+            break;
+        }
+    }
+
+    if (!base) {
+        printf("K230 boot: no 'ota_meta' entry in TOC\n");
+        return 0;
+    }
+
+    if (!span) {
+        printf("K230 boot: ota_meta partition size invalid\n");
+        return 0;
+    }
+
+    if (slot == 'B')
+        base += span;
+
+    return base;
+}
+
+static int k230_meta_read_slot(char slot, uint32_t *pver, bool *pvalid)
+{
+    struct ota_slot_meta *meta;
+    uint32_t crc_cal, crc_img;
+    ulong off;
+    int ret = 0;
+
+    if ((NULL == pver) || (NULL == pvalid)) {
+        ret = -1;
+        printf("invalid para\n");
+        goto out;
+    }
+
+    off = k230_get_ota_meta_offset(slot);
+    if (!off) {
+        ret = -1;
+        goto out;
+    }
+
+    meta = (struct ota_slot_meta *)k230_get_encrypted_image_load_addr();
+    ret = k230_read_meta_block(off, meta);
+    if (ret) {
+        goto out;
+    }
+
+    if (meta->magic != OTA_META_MAGIC) {
+        ret = -1;
+        goto out;
+    }
+
+    crc_img = meta->crc32;
+    meta->crc32 = 0;
+    crc_cal = crc32(0, (const unsigned char *)meta, sizeof(*meta));
+    if (crc_cal != crc_img) {
+        printf("WARN: meta slot %c crc mismatch: calc=0x%08x img=0x%08x\n",
+               slot, crc_cal, crc_img);
+        ret = -1;
+        goto out;
+    }
+
+    *pver = meta->version;
+    *pvalid = true;
+
+out:
+    return ret;
+}
+
+static char k230_select_boot_slot(void)
+{
+    uint32_t ver_a = 0, ver_b = 0;
+    bool valid_a = false, valid_b = false;
+    char active = 'A';
+
+    if (k230_meta_read_slot('A', &ver_a, &valid_a))
+        valid_a = 0;
+    if (k230_meta_read_slot('B', &ver_b, &valid_b))
+        valid_b = 0;
+
+    if (!valid_a && !valid_b) {
+        goto out;
+    }
+
+    if (valid_a && !valid_b) {
+        active = 'A';
+    } else if (!valid_a && valid_b) {
+        active = 'B';
+    } else {
+        if (ver_a == ver_b)
+            active = 'A';
+        else if (ver_a > ver_b)
+            active = 'A';
+        else
+            active = 'B';
+
+        if ((ver_a > ver_b ? (ver_a - ver_b) : (ver_b - ver_a)) > 1) {
+            printf("WARN: slot version gap too large: A=0x%x B=0x%x\n",
+                   ver_a, ver_b);
+        }
+    }
+
+out:
+    printf("select slot %c (ver_a=0x%x, ver_b=0x%x)\n", active, ver_a, ver_b);
+
+    return active;
 }
 
 static uint get_gunzip_dest_length(const u8 *zipped_data, uint zipped_len)
@@ -577,15 +732,54 @@ out:
 static int k230_load_img(void)
 {
     uint l_addr;
+    char slot = k230_select_boot_slot();
+    int cnt = 0;
+
+retry:
+    cnt++;
 
     for (int i = 0; i < toc.entry_count; i++) {
-        if (toc.entries[i].load) {
-            l_addr = _k230_load_img(toc.entries[i].offset);
-            if (l_addr == INVALID_LOAD_ADDR) {
-                printf("%s: load %s fail\n", __func__, toc.entries[i].name);
+        struct k230_toc_entry *e = &toc.entries[i];
+        bool _boot = false;
+
+        if (!e->load)
+            continue;
+
+        if (e->boot) {
+            e->boot &= ~K230_BOOT_FLAG_MASK;
+            _boot = true;
+        }
+
+        if (0 == strncmp(e->name, "rtt_a", sizeof(e->name)) ||
+            0 == strncmp(e->name, "rtapp_a", sizeof(e->name))) {
+            if (slot == 'B') {
                 continue;
             }
-            toc.entries[i].load_addr = l_addr;
+        } else if (0 == strncmp(e->name, "rtt_b", sizeof(e->name)) ||
+                   0 == strncmp(e->name, "rtapp_b", sizeof(e->name))) {
+            if (slot == 'A') {
+                continue;
+            }
+        }
+
+        l_addr = _k230_load_img(e->offset);
+        if (l_addr == INVALID_LOAD_ADDR) {
+            printf("%s: load %s failed on slot %c, try slot %c\n",
+                   __func__, e->name, slot, ((slot == 'A') ? 'B': 'A'));
+
+            if (cnt == 1) {
+                slot = (slot == 'A') ? 'B' : 'A';
+                goto retry;
+            }
+
+            /* 第二次尝试仍失败，放弃启动 */
+            return -1;
+        }
+
+        e->load_addr = l_addr;
+
+        if (_boot) {
+            e->boot |= K230_BOOT_FLAG_MASK;
         }
     }
 
@@ -639,18 +833,15 @@ static void k230_boot_img(void)
     struct k230_toc_entry *core1_entry = NULL;
 
     for (int i = 0; i < toc.entry_count; i++) {
-        if (toc.entries[i].boot) {
-            int core_num = (toc.entries[i].boot & K230_BOOT_CORE_NUM_MASK)
-                >> K230_BOOT_CORE_NUM_SHIFT;
+        struct k230_toc_entry *e = &toc.entries[i];
+
+        if (e->boot & K230_BOOT_FLAG_MASK) {
+            int core_num = (e->boot & K230_BOOT_CORE_MASK) >> K230_BOOT_CORE_SHIFT;
 
             if (core_num == 0) {
-                core0_entry = &toc.entries[i];
-                printf("Found Core 0 (Small Core): %s at 0x%lx\n",
-                       toc.entries[i].name, toc.entries[i].load_addr);
+                core0_entry = e;
             } else if (core_num == 1) {
-                core1_entry = &toc.entries[i];
-                printf("Found Core 1 (Big Core): %s at 0x%lx\n",
-                       toc.entries[i].name, toc.entries[i].load_addr);
+                core1_entry = e;
             }
         }
     }
@@ -698,4 +889,3 @@ int k230_run_system(void)
 out:
     return ret;
 }
-
