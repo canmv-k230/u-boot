@@ -29,12 +29,12 @@ obj-y += board.o
 
 
 obj-$(CONFIG_CANMV_YAHBOOM_LPDDR4_1066) += gen_canmv_yahboom_lpddr4_1066.lex.o
-$(obj)/gen_canmv_yahboom_lpddr4_1066.lex.c: $(src)/../k230_evb/lpddr4_32_swap_1066.c   $(BOARD_COMMON_DIR)/ddr.sh
+$(obj)/gen_canmv_yahboom_lpddr4_1066.lex.c: $(src)/../k230_canmv_01studio/canmv_01studio_lpddr4_init_32_swap_1066.c   $(BOARD_COMMON_DIR)/ddr.sh
 	$(Q)($(BOARD_COMMON_DIR)/ddr.sh $< $@ 0x50000 0x53fff 0x54000 0x5433d || exit 1)
 
 
 obj-$(CONFIG_CANMV_YAHBOOM_LPDDR4_1600_WITHOUT_ODT) += gen_canmv_yahboom_lpddr4_1600_without_odt.lex.o
-$(obj)/gen_canmv_yahboom_lpddr4_1600_without_odt.lex.c: $(src)/../k230_evb/lpddr4_32_swap_1600_without_odt.c   $(BOARD_COMMON_DIR)/ddr.sh
+$(obj)/gen_canmv_yahboom_lpddr4_1600_without_odt.lex.c: $(src)/lpddr4_32_swap_1600_without_odt.c   $(BOARD_COMMON_DIR)/ddr.sh
 	$(Q)($(BOARD_COMMON_DIR)/ddr.sh $< $@ 0x50000 0x53fff 0x54000 0x5433d || exit 1)
 
 
