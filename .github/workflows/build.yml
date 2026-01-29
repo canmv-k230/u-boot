@@ -118,7 +118,7 @@ jobs:
             make ${UBOOT_DEFCONFIG} || exit $?
             # disable prebuilt
             sed -i 's/^CONFIG_UBOOT_USE_PREBUILT=y$/CONFIG_UBOOT_USE_PREBUILT=n/' ${{ github.workspace }}/canmv_k230/.config
-            make uboot || exit $?
+            make -j8 uboot || exit $?
 
             # Also copy artifacts to artifacts folder
             cp ${{ github.workspace }}/canmv_k230/output/${UBOOT_DEFCONFIG}/uboot/u-boot.bin ~/artifacts/${base_name}/u-boot.bin || { echo "u-boot.bin missing"; exit $?; }
@@ -131,7 +131,7 @@ jobs:
             # disable prebuilt
             sed -i 's/^CONFIG_UBOOT_USE_PREBUILT=y$/CONFIG_UBOOT_USE_PREBUILT=n/' ${{ github.workspace }}/canmv_k230/.config
 
-            make uboot || exit $?
+            make -j8 uboot || exit $?
 
             cp ${{ github.workspace }}/canmv_k230/output/${UBOOT_DEFCONFIG}/uboot/spl/u-boot-spl.bin ~/artifacts/${base_name}/u-boot-spl-fastboot.bin || { echo "u-boot-spl-fastboot missing"; exit $?; }
           done
