@@ -89,10 +89,13 @@ jobs:
             [k230_canmv_v1p0p1_defconfig]="k230_canmv"
             [k230_canmv_01studio_defconfig]="k230_canmv_01studio"
             [k230_canmv_dongshanpi_defconfig]="k230_canmv_dongshanpi"
+            [k230_canmv_gt6700_defconfig]="k230_canmv_gt6700"
+            [k230_canmv_hiwonder_defconfig]="k230_canmv_hiwonder"
             [k230_canmv_lckfb_defconfig]="k230_canmv_lckfb"
-            [k230_canmv_yahboom_defconfig]="k230_canmv_yahboom"
             [k230_canmv_rtt_evb_defconfig]="k230_canmv_rtt_evb"
             [k230_canmv_v3p0_defconfig]="k230_canmv_v3p0"
+            [k230_canmv_wondermk_defconfig]="k230_canmv_wondermk"
+            [k230_canmv_yahboom_defconfig]="k230_canmv_yahboom"
             [k230_rtos_evb_defconfig]="k230_evb"
             [k230_rtos_evb_spinand_defconfig]="k230_evb_spinand"
             [k230_canmv_labplus_1956_defconfig]="k230_labplus_1956"
@@ -100,7 +103,6 @@ jobs:
             [k230d_canmv_bpi_zero_defconfig]="k230d_canmv_bpi_zero"
             [k230d_canmv_junroc_ai_cam_defconfig]="k230d_canmv_junroc_ai_cam"
             [k230d_canmv_labplus_ai_camera_defconfig]="k230d_labplus_ai_camera"
-            [k230_canmv_gt6700_defconfig]="k230_canmv_gt6700"
           )
 
           echo "Defconfigs: ${!defconfig_to_board[@]}"
