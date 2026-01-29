@@ -47,6 +47,10 @@ config TARGET_K230_CANMV_HIWONDER
 	bool "Support k230_CANMV(HiWonder)" 
 	select SYS_CACHE_SHIFT_6 
 
+config TARGET_K230_CANMV_WONDERMK
+	bool "Support k230_CANMV(WonderMK)" 
+	select SYS_CACHE_SHIFT_6 
+
 config TARGET_K230_CANMV_YAHBOOM
 	bool "Support k230_CANMV(YAHBOOM)"
 	select SYS_CACHE_SHIFT_6
@@ -140,6 +144,7 @@ source "board/kendryte/k230_burntool/Kconfig"
 source "board/kendryte/k230_canmv/Kconfig"
 source "board/kendryte/k230_canmv_01studio/Kconfig"
 source "board/kendryte/k230_canmv_hiwonder/Kconfig"
+source "board/kendryte/k230_canmv_wondermk/Kconfig"
 source "board/kendryte/k230_canmv_yahboom/Kconfig"
 source "board/kendryte/k230_canmv_gt6700/Kconfig"
 source "board/kendryte/k230d_canmv_bpi_zero/Kconfig"
