@@ -19,6 +19,7 @@ dtb-$(CONFIG_TARGET_K230_CANMV_01STUDIO) += k230_canmv_01studio.dtb
 dtb-$(CONFIG_TARGET_K230_CANMV_YAHBOOM) += k230_canmv_yahboom.dtb
 dtb-$(CONFIG_TARGET_K230D_CANMV_BPI_ZERO) += k230d_canmv_bpi_zero.dtb
 dtb-$(CONFIG_TARGET_K230D_CANMV_JUNROC_AI_CAM) += k230d_canmv_junroc_ai_cam.dtb
+dtb-$(CONFIG_TARGET_K230D_CANMV_MINI) += k230d_canmv_mini.dtb
 dtb-$(CONFIG_TARGET_K230_CANMV_DONGSHANPI) += k230_canmv_dongshanpi.dtb
 dtb-$(CONFIG_TARGET_K230D_CANMV_ATK_DNK230D) += k230d_canmv_atk_dnk230d.dtb
 dtb-$(CONFIG_TARGET_K230_EVB) += k230_evb.dtb
