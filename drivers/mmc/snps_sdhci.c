@@ -55,7 +55,7 @@ struct snps_sdhci_plat {
 #define DWC_MSHC_DLL_CNFG2_R (DWC_MSHC_PTR_PHY_REGS + 0x26)
 
 #define DWC_MSHC_PHY_PAD_SD_CLK                                                \
-	((1 << TXSLEW_N_LSB) | (3 << TXSLEW_P_LSB) | (0 << WEAKPULL_EN_LSB) |  \
+	((1 << TXSLEW_N_LSB) | (3 << TXSLEW_P_LSB) | (1 << WEAKPULL_EN_LSB) |  \
 	 (2 << RXSEL_LSB))
 #define DWC_MSHC_PHY_PAD_SD_DAT                                                \
 	((1 << TXSLEW_N_LSB) | (3 << TXSLEW_P_LSB) | (1 << WEAKPULL_EN_LSB) |  \
@@ -65,7 +65,7 @@ struct snps_sdhci_plat {
 	 (2 << RXSEL_LSB))
 
 #define DWC_MSHC_PHY_PAD_EMMC_CLK                                              \
-	((2 << TXSLEW_N_LSB) | (2 << TXSLEW_P_LSB) | (0 << WEAKPULL_EN_LSB) |  \
+	((2 << TXSLEW_N_LSB) | (2 << TXSLEW_P_LSB) | (1 << WEAKPULL_EN_LSB) |  \
 	 (0 << RXSEL_LSB))
 #define DWC_MSHC_PHY_PAD_EMMC_DAT                                              \
 	((2 << TXSLEW_N_LSB) | (2 << TXSLEW_P_LSB) | (1 << WEAKPULL_EN_LSB) |  \

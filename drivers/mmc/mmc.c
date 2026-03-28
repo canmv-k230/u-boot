@@ -597,7 +597,7 @@ static int mmc_switch_voltage(struct mmc *mmc, int signal_voltage)
 
 static int sd_send_op_cond(struct mmc *mmc, bool uhs_en)
 {
-	int timeout = 1000;
+	int timeout = 5000;
 	int err;
 	struct mmc_cmd cmd;
 
