@@ -104,6 +104,11 @@ config TARGET_K230D_CANMV_LABPLUS_AI_CAMERA
 	select DDR_K230D
 	select SYS_CACHE_SHIFT_6
 
+config TARGET_K230D_CANMV_LABPLUS_AI_CAMERA_V2
+	bool "Support K230D_CANMV(LabPlusAiCamera V2)"
+	select DDR_K230D
+	select SYS_CACHE_SHIFT_6
+
 config TARGET_K230_LABPLUS_1956
 	bool "Support K230 LabPlus 1956"
 	select SYS_CACHE_SHIFT_6
@@ -162,6 +167,7 @@ source "board/kendryte/k230_aihardware/Kconfig"
 source "board/kendryte/k230d_canmv_atk_dnk230d/Kconfig"
 source "board/kendryte/k230_evb/Kconfig"
 source "board/kendryte/k230d_labplus_ai_camera/Kconfig"
+source "board/kendryte/k230d_labplus_ai_camera_v2/Kconfig"
 source "board/kendryte/k230_labplus_1956/Kconfig"
 
 # platform-specific options below

@@ -1,0 +1,19 @@
+if TARGET_K230D_CANMV_LABPLUS_AI_CAMERA_V2
+
+    config SYS_CPU
+        default "k230"
+
+    config SYS_VENDOR
+        default "kendryte"
+
+    config SYS_BOARD
+        default "k230d_labplus_ai_camera_v2"
+
+    config SYS_CONFIG_NAME
+        default "k230_common"
+
+    config BOARD_SPECIFIC_OPTIONS
+        def_bool y
+        select KENDRYTE_K230
+
+endif
