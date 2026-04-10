@@ -22,7 +22,7 @@ void board_ddr_init(void)
 {
 int data;
 int train_data=0;
-printf(" %s %s %s \n", __func__, __DATE__,__TIME__);
+//printf(" %s %s %s \n", __func__, __DATE__,__TIME__);
 
   reg_read (0x91100060,data);
   data =data & 0xfffffffc;

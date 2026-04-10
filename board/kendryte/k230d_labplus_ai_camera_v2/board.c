@@ -25,6 +25,9 @@ int ddr_init_training(void) {
 
   board_ddr_init();
 
+  kd_pin_set_ddr(8, 1);
+  kd_pin_set_dr(8, 0);
+
   return 0;
 }
 
