@@ -42,6 +42,7 @@ obj-y += puf_fw/pufs_crypto.o
 obj-y += puf_fw/pufs_dma.o
 obj-y += puf_fw/pufs_ecc.o
 obj-y += puf_fw/pufs_ecp.o
+obj-y += puf_fw/pufs_ecp_mprog.o
 obj-y += puf_fw/pufs_hmac.o
 obj-y += puf_fw/pufs_ka.o
 obj-y += puf_fw/pufs_reg_ctrl.o

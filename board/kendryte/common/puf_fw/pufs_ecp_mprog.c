@@ -19,7 +19,7 @@
  * IF ANY, THAT YOU HAVE PAID DIRECTLY TO PUFSECURITY FOR THIS SOFTWARE.
  */
 
-#include "pufs_ecp_mprog.h"
+#include "kendryte/pufs/pufs_ecp/pufs_ecp_mprog.h"
 
 #define ECF39303 1
 

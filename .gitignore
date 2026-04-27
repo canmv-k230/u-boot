@@ -106,3 +106,6 @@ __pycache__
 /pylint.out/
 
 !.github
+
+# k230 added
+board/kendryte/common/secure_boot_config_autogen.h

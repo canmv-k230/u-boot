@@ -59,7 +59,11 @@ typedef enum {
     BOOT_MEDIUM_MAX,
 } boot_medium_e;
 
-typedef enum { NONE_SECURITY = 0, GCM_ONLY, CHINESE_SECURITY, INTERNATIONAL_SECURITY } crypto_type_e;
+typedef enum {
+    NONE_SECURITY = 0,
+    CHINESE_SECURITY = 1,
+    INTERNATIONAL_SECURITY = 2,
+} crypto_type_e;
 
 typedef struct __firmware_head_st {
     uint32_t magic; // 方便升级时快速判断固件是否有效。

@@ -47,10 +47,16 @@
 #include <u-boot/crc.h>
 
 #include "board_common.h"
+#include "secure_boot_config_autogen.h"
 
 #include "k230_atag.h"
 
+#include "kendryte/pufs/pufs_ecp/pufs_ecp.h"
 #include "kendryte/pufs/pufs_hmac/pufs_hmac.h"
+#include "kendryte/pufs/pufs_rt/pufs_rt.h"
+#include "kendryte/pufs/pufs_sm2/pufs_sm2.h"
+#include "kendryte/pufs/pufs_sp38a/pufs_sp38a.h"
+#include "kendryte/pufs/pufs_sp38d/pufs_sp38d.h"
 
 /* TOC (Table of Contents) 定义 */
 #define K230_TOC_OFFSET        0xe0000
@@ -84,6 +90,15 @@ static struct k230_toc toc;
 static struct blk_desc *pblk_desc;
 static uint64_t rtapp_load_addr, rtapp_size, rttapp_loaded = 0;
 
+#define K230_DISABLE_NONE_SECURITY_MASK	0x1U
+#define K230_GCM_IV_LEN			12U
+#define K230_GCM_TAG_LEN		16U
+#define K230_GCM_UPDATE_CHUNK_SIZE	0x10000U
+#define K230_DOWNSTREAM_AES_KEY_SLOT	OTPKEY_3
+#define K230_DOWNSTREAM_RSA_HASH_SLOT	OTPKEY_8
+#define K230_DOWNSTREAM_SM4_KEY_SLOT	OTPKEY_5
+#define K230_DOWNSTREAM_SM2_HASH_SLOT	OTPKEY_9
+
 struct ota_slot_meta {
     uint32_t magic;
     uint32_t version;
@@ -98,10 +113,122 @@ unsigned long k230_get_encrypted_image_load_addr(void)
     return addr & ~(4096-1);
 }
 
+unsigned long k230_get_encrypted_image_decrypt_addr(void)
+{
+	unsigned long addr = g_dram_base + (g_dram_size / 2);
+
+	return addr & ~(4096 - 1);
+}
+
 unsigned long k230_get_rttapp_load_addr(void)
 {
     unsigned long addr = g_dram_base + g_dram_size - (g_dram_size / 3);
     return addr & ~(4096-1);
+}
+
+static const uint8_t *k230_get_firmware_sm4_iv(void)
+{
+    return k230_firmware_sm4_iv;
+}
+
+static bool k230_calc_range_end(ulong start, ulong size, ulong *end)
+{
+    ulong max_value = ~0UL;
+
+    if (end == NULL)
+        return false;
+
+    if (size > (max_value - start))
+        return false;
+
+    *end = start + size;
+    return true;
+}
+
+static bool k230_ranges_overlap(ulong start_a, ulong size_a,
+                ulong start_b, ulong size_b)
+{
+    ulong end_a;
+    ulong end_b;
+
+    if ((size_a == 0) || (size_b == 0))
+        return false;
+
+    if (!k230_calc_range_end(start_a, size_a, &end_a) ||
+        !k230_calc_range_end(start_b, size_b, &end_b))
+        return true;
+
+    return (start_a < end_b) && (start_b < end_a);
+}
+
+static ulong k230_get_encrypted_image_buffer_size(void)
+{
+    ulong load_addr = k230_get_encrypted_image_load_addr();
+    ulong decrypt_addr = k230_get_encrypted_image_decrypt_addr();
+
+    if (decrypt_addr <= load_addr)
+        return 0;
+
+    return decrypt_addr - load_addr;
+}
+
+static int k230_get_firmware_payload_limit(const char *toc_name,
+                       uint64_t partition_size,
+                       ulong *payload_limit)
+{
+    ulong buffer_size;
+
+    if (payload_limit == NULL)
+        return -1;
+
+    buffer_size = k230_get_encrypted_image_buffer_size();
+    if ((partition_size <= sizeof(firmware_head_s)) ||
+        (buffer_size <= sizeof(firmware_head_s))) {
+        printf("%s: invalid bounds for %s part=0x%llx buf=0x%lx\n",
+               __func__, toc_name, partition_size, buffer_size);
+        return -1;
+    }
+
+    *payload_limit = min_t(ulong,
+                   (ulong)(partition_size - sizeof(firmware_head_s)),
+                   buffer_size - sizeof(firmware_head_s));
+    return 0;
+}
+
+static int k230_validate_image_layout(image_header_t *pUh, ulong src_data,
+                      ulong src_len, ulong dst_len)
+{
+    ulong dram_end;
+    ulong img_load_addr;
+    ulong img_end_addr;
+
+    if (pUh == NULL)
+        return -1;
+
+    img_load_addr = (ulong)image_get_load(pUh);
+
+    if (!k230_calc_range_end(g_dram_base, g_dram_size, &dram_end) ||
+        !k230_calc_range_end(img_load_addr, dst_len, &img_end_addr)) {
+        printf("%s: address range overflow for %s\n", __func__, image_get_name(pUh));
+        return -1;
+    }
+
+    if ((img_load_addr < g_dram_base) || (img_end_addr > dram_end)) {
+        printf("%s: %s load range [0x%lx, 0x%lx) exceeds dram [0x%llx, 0x%lx)\n",
+               __func__, image_get_name(pUh), img_load_addr, img_end_addr,
+               g_dram_base, dram_end);
+        return -1;
+    }
+
+    if ((image_get_comp(pUh) == IH_COMP_GZIP) &&
+        k230_ranges_overlap(img_load_addr, dst_len, src_data, src_len)) {
+        printf("%s: %s load range [0x%lx, 0x%lx) overlaps compressed source [0x%lx, 0x%lx)\n",
+               __func__, image_get_name(pUh), img_load_addr, img_end_addr,
+               src_data, src_data + src_len);
+        return -1;
+    }
+
+    return 0;
 }
 
 static int k230_boot_decomp_to_load_addr(image_header_t* pUh, ulong des_len, ulong data, ulong* plen)
@@ -130,17 +257,37 @@ static int k230_boot_decomp_to_load_addr(image_header_t* pUh, ulong des_len, ulo
     return ret;
 }
 
-static int k230_boot_check_and_get_plain_data(firmware_head_s* pfh, ulong* pplain_addr)
+static int k230_boot_check_and_get_plain_data(firmware_head_s *pfh,
+                      const char *toc_name,
+                      ulong *pplain_addr)
 {
     pufs_dgst_st md;
+    ulong plain_addr = 0;
+    uint32_t outlen = 0;
+    uint32_t otp_msc = 0;
+    uint32_t otp_firmware_version = 0;
+    uint32_t cur_firmware_version = 0;
+    const uint8_t *cipher_data = (const uint8_t *)(pfh + 1);
 
     if (K230_IMAGE_MAGIC_NUM != pfh->magic) {
         printf("magic error 0x%08X != 0x%08X \n", K230_IMAGE_MAGIC_NUM, pfh->magic);
         return 1;
     }
 
+    if (pufs_read_otp((uint8_t *)&otp_msc, OTP_BLOCK_PRODUCT_MISC_BYTES,
+              OTP_BLOCK_PRODUCT_MISC_ADDR) != SUCCESS) {
+        printf("otp product misc read error\n");
+        return 5;
+    }
+
+    if ((otp_msc & K230_DISABLE_NONE_SECURITY_MASK) &&
+        (pfh->crypto_type == NONE_SECURITY)) {
+        printf("none security disabled by otp\n");
+        return 6;
+    }
+
     if (NONE_SECURITY == pfh->crypto_type) {
-        if(SUCCESS != cb_pufs_hash(&md, (const uint8_t*)(pfh + 1), pfh->length, SHA_256)) {
+        if (SUCCESS != cb_pufs_hash(&md, cipher_data, pfh->length, SHA_256)) {
             printf("sha256 error\n");
             return 2;
         }
@@ -150,23 +297,163 @@ static int k230_boot_check_and_get_plain_data(firmware_head_s* pfh, ulong* pplai
             return 2;
         }
 
-        if (pplain_addr) {
-            *pplain_addr = (ulong)pfh + sizeof(*pfh);
+        plain_addr = (ulong)cipher_data;
+    } else if (INTERNATIONAL_SECURITY == pfh->crypto_type) {
+        uint8_t puk_hash_otp[SHA256_SUM_LEN];
+        const uint8_t *gcm_tag;
+        const uint8_t *gcm_iv;
+        uint32_t final_outlen = 0;
+        uint32_t total_outlen = 0;
+        uint32_t remaining_len;
+        const uint8_t *gcm_input;
+        uint8_t *gcm_output;
+
+        if (pufs_read_otp(puk_hash_otp, sizeof(puk_hash_otp),
+                  (K230_DOWNSTREAM_RSA_HASH_SLOT - OTPKEY_0) * OTP_KEY_LEN) != SUCCESS) {
+            printf("otp rsa hash read error\n");
+            return 7;
         }
-        return 0;
-    } else if ((CHINESE_SECURITY == pfh->crypto_type) || (INTERNATIONAL_SECURITY == pfh->crypto_type)
-               || (GCM_ONLY == pfh->crypto_type)) {
-        printf("error, not support encrypted firmware\n");
-        return 3;
+
+        if (SUCCESS != cb_pufs_hash(&md, (const uint8_t *)&pfh->verify, 256 + 4, SHA_256)) {
+            printf("rsa pubkey hash error\n");
+            return 8;
+        }
+
+        if (memcmp(md.dgst, puk_hash_otp, sizeof(puk_hash_otp))) {
+            printf("rsa pubkey hash mismatch\n");
+            return 9;
+        }
+
+        if (pfh->length < (K230_GCM_IV_LEN + K230_GCM_TAG_LEN)) {
+            printf("gcm payload too short\n");
+            return 10;
+        }
+
+        gcm_iv = cipher_data;
+        gcm_input = cipher_data + K230_GCM_IV_LEN;
+        remaining_len = pfh->length - K230_GCM_IV_LEN - K230_GCM_TAG_LEN;
+        gcm_tag = cipher_data + pfh->length - K230_GCM_TAG_LEN;
+        if (cb_pufs_rsa_p1v15_verify(pfh->verify.rsa.signature,
+                         RSA2048,
+                         pfh->verify.rsa.n,
+                         pfh->verify.rsa.e,
+                         gcm_tag,
+                         K230_GCM_TAG_LEN) != SUCCESS) {
+            printf("rsa signature verify error\n");
+            return 11;
+        }
+
+        plain_addr = k230_get_encrypted_image_decrypt_addr();
+        if (cb_pufs_dec_gcm_init(AES, OTPKEY, K230_DOWNSTREAM_AES_KEY_SLOT,
+                     256, gcm_iv, 12) != SUCCESS) {
+            printf("gcm init error\n");
+            return 12;
+        }
+
+        if (cb_pufs_dec_gcm_update(NULL, NULL, NULL, 0) != SUCCESS) {
+            printf("gcm aad update error\n");
+            return 12;
+        }
+
+        gcm_output = (uint8_t *)plain_addr;
+        while (remaining_len > 0) {
+            uint32_t chunk_len = remaining_len;
+
+            if (chunk_len > K230_GCM_UPDATE_CHUNK_SIZE)
+                chunk_len = K230_GCM_UPDATE_CHUNK_SIZE;
+
+            if (cb_pufs_dec_gcm_update(gcm_output, &outlen,
+                           gcm_input, chunk_len) != SUCCESS) {
+                printf("gcm data update error off=0x%x len=0x%x\n",
+                       total_outlen, chunk_len);
+                return 12;
+            }
+
+            total_outlen += outlen;
+            gcm_input += chunk_len;
+            gcm_output += outlen;
+            remaining_len -= chunk_len;
+        }
+
+        outlen = total_outlen;
+
+        if (cb_pufs_dec_gcm_final(gcm_output, &final_outlen, gcm_tag,
+                      K230_GCM_TAG_LEN) != SUCCESS) {
+            printf("gcm final error\n");
+            return 12;
+        }
+
+        outlen = total_outlen + final_outlen;
+    } else if (CHINESE_SECURITY == pfh->crypto_type) {
+        uint8_t puk_hash_otp[SHA256_SUM_LEN];
+        pufs_ec_point_st puk = { .qlen = 32 };
+        pufs_ecdsa_sig_st sig = { .qlen = 32 };
+        const uint8_t *sm4_iv = k230_get_firmware_sm4_iv();
+
+        if (pufs_read_otp(puk_hash_otp, sizeof(puk_hash_otp),
+                  (K230_DOWNSTREAM_SM2_HASH_SLOT - OTPKEY_0) * OTP_KEY_LEN) != SUCCESS) {
+            printf("otp sm2 hash read error\n");
+            return 13;
+        }
+
+        if (SUCCESS != cb_pufs_hash(&md, (const uint8_t *)&pfh->verify,
+                    sizeof(pfh->verify.sm2) - sizeof(pfh->verify.sm2.r) - sizeof(pfh->verify.sm2.s),
+                    SM3)) {
+            printf("sm2 pubkey hash error\n");
+            return 14;
+        }
+
+        if (memcmp(md.dgst, puk_hash_otp, sizeof(puk_hash_otp))) {
+            printf("sm2 pubkey hash mismatch\n");
+            return 15;
+        }
+
+        memcpy(puk.x, pfh->verify.sm2.pukx, puk.qlen);
+        memcpy(puk.y, pfh->verify.sm2.puky, puk.qlen);
+        memcpy(sig.r, pfh->verify.sm2.r, sig.qlen);
+        memcpy(sig.s, pfh->verify.sm2.s, sig.qlen);
+
+        if (cb_pufs_sm2_verify(sig,
+                      cipher_data,
+                      pfh->length,
+                      pfh->verify.sm2.id,
+                      pfh->verify.sm2.idlen,
+                      puk) != SUCCESS) {
+            printf("sm2 signature verify error\n");
+            return 16;
+        }
+
+        plain_addr = k230_get_encrypted_image_decrypt_addr();
+        if (cb_pufs_dec_cbc((uint8_t *)plain_addr, &outlen,
+                    cipher_data, pfh->length,
+                    SM4, OTPKEY, K230_DOWNSTREAM_SM4_KEY_SLOT, 128,
+                    sm4_iv, 0) != SUCCESS) {
+            printf("sm4 decrypt error\n");
+            return 17;
+        }
     } else {
         printf("error crypto type =0x%x\n", pfh->crypto_type);
         return 4;
     }
 
-    // never reach
-    return -1;
-}
+    if (pufs_read_otp((uint8_t *)&otp_firmware_version, OTP_BLOCK_VERSION_BYTES,
+              OTP_BLOCK_VERSION_ADDR) != SUCCESS) {
+        printf("otp version read error\n");
+        return 18;
+    }
 
+    cur_firmware_version = *(uint32_t *)plain_addr;
+    if (cur_firmware_version < otp_firmware_version) {
+        printf("firmware rollback detected cur=0x%x otp=0x%x\n",
+               cur_firmware_version, otp_firmware_version);
+        return 19;
+    }
+
+    if (pplain_addr)
+        *pplain_addr = plain_addr;
+
+    return 0;
+}
 
 #if defined(CONFIG_MTD_SPI_NAND)
 
@@ -255,7 +542,7 @@ static void *k230_read_toc(void)
     memset(&toc, 0, sizeof(toc));
 
     if (K230_TOC_ENTRY_SIZE != sizeof(struct k230_toc_entry)) {
-        printf("%s: struct k230_toc_entry(%d) must aligned to 64B\n",
+        printf("%s: struct k230_toc_entry(%lu) must aligned to 64B\n",
                __func__, sizeof(struct k230_toc_entry));
         ret = -1;
         goto out;
@@ -526,8 +813,6 @@ static char k230_select_boot_slot(void)
     }
 
 out:
-    printf("select slot %c (ver_a=0x%x, ver_b=0x%x)\n", active, ver_a, ver_b);
-
     return active;
 }
 
@@ -543,13 +828,23 @@ static uint get_gunzip_dest_length(const u8 *zipped_data, uint zipped_len)
     return original_len;
 }
 
-static uint _k230_load_img(uint64_t offset)
+static uint _k230_load_img(const char *toc_name, uint64_t offset,
+               uint64_t partition_size)
 {
     int ret = 0;
     ulong src_len, src_data, dst_len, plain_addr = 0;
+    ulong max_payload_len = 0;
     image_header_t *pUh = NULL;
     ulong buff = k230_get_encrypted_image_load_addr();
     firmware_head_s *pfh = (firmware_head_s*)buff;
+    bool is_rtapp = false;
+
+    ret = k230_get_firmware_payload_limit(toc_name, partition_size,
+                          &max_payload_len);
+    if (ret) {
+        ret = -1;
+        goto out;
+    }
 
 #if defined(CONFIG_MMC)
     if ((BOOT_MEDIUM_SDIO0 == g_boot_medium) || (BOOT_MEDIUM_SDIO1 == g_boot_medium)) {
@@ -568,16 +863,24 @@ static uint _k230_load_img(uint64_t offset)
             goto out;
         }
 
-        ret = blk_dread(pblk_desc, blk_s, HD_BLK_NUM, (char*)buff);
-        if (ret != HD_BLK_NUM) {
-            printf("%s: blk_dread fail: %d\n", __func__, ret);
-            ret = -1;
-            goto out;
-        }
+    	ret = blk_dread(pblk_desc, blk_s, HD_BLK_NUM, (char*)buff);
+    	if (ret != HD_BLK_NUM) {
+    	    printf("%s: blk_dread fail: %d\n", __func__, ret);
+    	    ret = -1;
+    	    goto out;
+    	}
 
         if (pfh->magic != K230_IMAGE_MAGIC_NUM) {
             printf("%s: pfh->magic 0x%x != 0x%x blk=0x%lx buff=0x%lx\n",
                    __func__, pfh->magic, K230_IMAGE_MAGIC_NUM, blk_s, buff);
+            ret = -1;
+            goto out;
+        }
+
+        if (pfh->length > max_payload_len) {
+            printf("%s: %s payload 0x%x exceeds limit 0x%lx (part=0x%llx)\n",
+                   __func__, toc_name, pfh->length, max_payload_len,
+                   partition_size);
             ret = -1;
             goto out;
         }
@@ -589,9 +892,9 @@ static uint _k230_load_img(uint64_t offset)
             ret = -1;
             goto out;
         }
+
     } else
 #endif
-
 #if defined(CONFIG_MTD_SPI_NAND)
     if (g_boot_medium == BOOT_MEDIUM_NANDFLASH) {
         u_char*          buf           = (u_char*)buff;
@@ -649,6 +952,15 @@ static uint _k230_load_img(uint64_t offset)
             goto out;
         }
 
+        if (pfh->length > max_payload_len) {
+            printf("%s: %s payload 0x%x exceeds limit 0x%lx (part=0x%llx)\n",
+                   __func__, toc_name, pfh->length, max_payload_len,
+                   partition_size);
+            put_mtd_device(mtd);
+            ret = -1;
+            goto out;
+        }
+
         if (pfh->length > (mtd->writesize - sizeof(*pfh))) {
             end = off + pfh->length - (mtd->writesize - sizeof(*pfh));
             while (off < end) {
@@ -676,7 +988,7 @@ static uint _k230_load_img(uint64_t offset)
         goto out;
     }
 
-    ret = k230_boot_check_and_get_plain_data((firmware_head_s*)buff, &plain_addr);
+    ret = k230_boot_check_and_get_plain_data((firmware_head_s*)buff, toc_name, &plain_addr);
     if (ret) {
         printf("%s: decrypt image failed: %d\n", __func__, ret);
         ret = -1;
@@ -697,21 +1009,30 @@ static uint _k230_load_img(uint64_t offset)
         image_multi_getimg(pUh, 0, &src_data, &src_len);
     }
 
-    dst_len = get_gunzip_dest_length((u8 *)src_data, src_len);
-    if (0 == dst_len) {
-        dst_len = 0x6000000;
+    if (image_get_comp(pUh) == IH_COMP_GZIP) {
+        dst_len = get_gunzip_dest_length((u8 *)src_data, src_len);
+        if (0 == dst_len) {
+            dst_len = 0x6000000;
+        }
+    } else {
+        dst_len = src_len;
     }
 
-    if (strncmp(image_get_name(pUh), "rtapp", 32) == 0) {
+    is_rtapp = (strncmp(image_get_name(pUh), "rtapp", 32) == 0);
+    if (is_rtapp) {
         rtapp_size = dst_len;
         rtapp_load_addr = k230_get_rttapp_load_addr();
         image_set_load(pUh, rtapp_load_addr);
+    }
 
-        if((rtapp_load_addr + rtapp_size) > g_dram_size) {
-            printf("rtapp too large\n");
-            return INVALID_LOAD_ADDR;
-        }
+    ret = k230_validate_image_layout(pUh, src_data, src_len, dst_len);
+    if (ret) {
+        printf("%s: invalid image layout for %s\n", __func__, image_get_name(pUh));
+        ret = -1;
+        goto out;
+    }
 
+    if (is_rtapp) {
         rttapp_loaded = 1;
     }
 
@@ -762,7 +1083,7 @@ retry:
             }
         }
 
-        l_addr = _k230_load_img(e->offset);
+        l_addr = _k230_load_img(e->name, e->offset, e->size);
         if (l_addr == INVALID_LOAD_ADDR) {
             printf("%s: load %s failed on slot %c, try slot %c\n",
                    __func__, e->name, slot, ((slot == 'A') ? 'B': 'A'));

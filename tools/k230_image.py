@@ -3,6 +3,7 @@ import os
 import getopt
 import sys
 import codecs
+import secrets
 # hash需要调用的库
 import hashlib, binascii
 # AES-GCM需要调用的库
@@ -48,7 +49,6 @@ private_key = b'\x39\x45\x20\x8f\x7b\x21\x44\xb1\x3f\x36\xe3\x8a\xc6\xd3\x9f\x95
 public_key_x = b'\x09\xf9\xdf\x31\x1e\x54\x21\xa1\x50\xdd\x7d\x16\x1e\x4b\xc5\xc6\x72\x17\x9f\xad\x18\x33\xfc\x07\x6b\xb0\x8f\xf3\x56\xf3\x50\x20'
 public_key_y = b'\xcc\xea\x49\x0c\xe2\x67\x75\xa5\x2d\xc6\xea\x71\x8c\xc1\xaa\x60\x0a\xed\x05\xfb\xf3\x5e\x08\x4a\x66\x32\xf6\x07\x2d\xa9\xad\x13'
 public_key = public_key_x + public_key_y
-K = b'\x59\x27\x6e\x27\xd5\x06\x86\x1a\x16\x68\x0f\x3a\xd9\xc0\x2d\xcc\xef\x3c\xc1\xfa\x3c\xdb\xe4\xce\x6d\x54\xb8\x0d\xea\xc1\xbc\x21'
 ID = b'1234567812345678'
 _private_key = codecs.encode(private_key, 'hex').decode('ascii')
 _public_key = codecs.encode(public_key, 'hex').decode('ascii')
@@ -188,11 +188,15 @@ class SM2_ALG:
     脚本根据gmssl-python项目实现了“Z值的计算”
     """
     def __init__(self):
-        _K = codecs.encode(K, 'hex').decode('ascii')
-        self._K = _K
+        pass
+
+    def _generate_random_k(self, sm2_crypt):
+        curve_order = int(sm2_crypt.ecc_table['n'], 16)
+        nonce = secrets.randbelow(curve_order - 1) + 1
+
+        return f'{nonce:0{sm2_crypt.para_len}x}'
 
     def sm2_sign(self, message):
-        _K = self._K
         sm2_crypt = sm2.CryptSM2(public_key=_public_key, private_key=_private_key)
         # 计算Z值
         z = '0080' + _ID + sm2_crypt.ecc_table['a'] + sm2_crypt.ecc_table['b'] + sm2_crypt.ecc_table[
@@ -202,9 +206,7 @@ class SM2_ALG:
         M_ = (Za + message.hex()).encode('utf-8')
         e = sm3.sm3_hash(func.bytes_to_list(binascii.a2b_hex(M_)))
         sign_data = binascii.a2b_hex(e.encode('utf-8'))
-        if _K is None:
-            _K = func.random_hex(sm2_crypt.para_len)
-        sign = sm2_crypt.sign(sign_data, _K)  # 16进制
+        sign = sm2_crypt.sign(sign_data, self._generate_random_k(sm2_crypt))  # 16进制
         r = sign[0:sm2_crypt.para_len]
         s = sign[sm2_crypt.para_len:]
         return sign, r, s
