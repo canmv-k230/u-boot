@@ -93,6 +93,7 @@ static uint64_t rtapp_load_addr, rtapp_size, rttapp_loaded = 0;
 #define K230_DISABLE_NONE_SECURITY_MASK	0x1U
 #define K230_GCM_IV_LEN			12U
 #define K230_GCM_TAG_LEN		16U
+#define K230_SM4_IV_LEN			16U
 #define K230_GCM_UPDATE_CHUNK_SIZE	0x10000U
 #define K230_DOWNSTREAM_AES_KEY_SLOT	OTPKEY_3
 #define K230_DOWNSTREAM_RSA_HASH_SLOT	OTPKEY_8
@@ -124,11 +125,6 @@ unsigned long k230_get_rttapp_load_addr(void)
 {
     unsigned long addr = g_dram_base + g_dram_size - (g_dram_size / 3);
     return addr & ~(4096-1);
-}
-
-static const uint8_t *k230_get_firmware_sm4_iv(void)
-{
-    return k230_firmware_sm4_iv;
 }
 
 static bool k230_calc_range_end(ulong start, ulong size, ulong *end)
@@ -388,7 +384,9 @@ static int k230_boot_check_and_get_plain_data(firmware_head_s *pfh,
         uint8_t puk_hash_otp[SHA256_SUM_LEN];
         pufs_ec_point_st puk = { .qlen = 32 };
         pufs_ecdsa_sig_st sig = { .qlen = 32 };
-        const uint8_t *sm4_iv = k230_get_firmware_sm4_iv();
+        const uint8_t *sm4_iv;
+        const uint8_t *sm4_input;
+        uint32_t sm4_input_len;
 
         if (pufs_read_otp(puk_hash_otp, sizeof(puk_hash_otp),
                   (K230_DOWNSTREAM_SM2_HASH_SLOT - OTPKEY_0) * OTP_KEY_LEN) != SUCCESS) {
@@ -423,9 +421,18 @@ static int k230_boot_check_and_get_plain_data(firmware_head_s *pfh,
             return 16;
         }
 
+        if (pfh->length < K230_SM4_IV_LEN) {
+            printf("sm4 payload too short\n");
+            return 17;
+        }
+
+        sm4_iv = cipher_data;
+        sm4_input = cipher_data + K230_SM4_IV_LEN;
+        sm4_input_len = pfh->length - K230_SM4_IV_LEN;
+
         plain_addr = k230_get_encrypted_image_decrypt_addr();
         if (cb_pufs_dec_cbc((uint8_t *)plain_addr, &outlen,
-                    cipher_data, pfh->length,
+                    sm4_input, sm4_input_len,
                     SM4, OTPKEY, K230_DOWNSTREAM_SM4_KEY_SLOT, 128,
                     sm4_iv, 0) != SUCCESS) {
             printf("sm4 decrypt error\n");

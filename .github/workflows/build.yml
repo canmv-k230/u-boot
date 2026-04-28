@@ -124,17 +124,6 @@ jobs:
             # Also copy artifacts to artifacts folder
             cp ${{ github.workspace }}/canmv_k230/output/${UBOOT_DEFCONFIG}/uboot/u-boot.bin ~/artifacts/${base_name}/u-boot.bin || { echo "u-boot.bin missing"; exit $?; }
             cp ${{ github.workspace }}/canmv_k230/output/${UBOOT_DEFCONFIG}/uboot/spl/u-boot-spl.bin ~/artifacts/${base_name}/u-boot-spl.bin || { echo "u-boot-spl.bin missing"; exit $?; }
-
-            # build fastboot spl
-            make uboot-clean || exit $?
-            echo "CONFIG_UBOOT_ENABLE_FAST_BOOT=y" >> ${{ github.workspace }}/canmv_k230/.config
-            echo "CONFIG_UBOOT_FAST_BOOT_RTSMART=y" >> ${{ github.workspace }}/canmv_k230/.config
-            # disable prebuilt
-            sed -i 's/^CONFIG_UBOOT_USE_PREBUILT=y$/CONFIG_UBOOT_USE_PREBUILT=n/' ${{ github.workspace }}/canmv_k230/.config
-
-            make -j8 uboot || exit $?
-
-            cp ${{ github.workspace }}/canmv_k230/output/${UBOOT_DEFCONFIG}/uboot/spl/u-boot-spl.bin ~/artifacts/${base_name}/u-boot-spl-fastboot.bin || { echo "u-boot-spl-fastboot missing"; exit $?; }
           done
 
           tree ~/artifacts
