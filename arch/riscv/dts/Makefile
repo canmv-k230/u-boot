@@ -26,6 +26,7 @@ dtb-$(CONFIG_TARGET_K230_EVB) += k230_evb.dtb
 dtb-$(CONFIG_TARGET_K230_CANMV_RTT_EVB) += k230_canmv_rtt_evb.dtb
 dtb-$(CONFIG_TARGET_K230D_CANMV_LABPLUS_AI_CAMERA_V2) += k230d_canmv_labplus_ai_camera_v2.dtb
 dtb-$(CONFIG_TARGET_K230_CANMV_MRT) += k230_canmv_mrt.dtb
+dtb-$(CONFIG_TARGET_K230D_CANMV_LUSHANPI_LITE) += k230d_canmv_lushanpi_lite.dtb
 
 include $(srctree)/scripts/Makefile.dts
 

@@ -33,6 +33,8 @@
 
 	aliases {
 		uart0 = &serial0;
+		mmc0 = &mmc0;
+		mmc1 = &mmc1;
 	};
 
 	chosen {

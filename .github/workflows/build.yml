@@ -104,6 +104,7 @@ jobs:
             [k230d_canmv_junroc_ai_cam_defconfig]="k230d_canmv_junroc_ai_cam"
             [k230d_canmv_labplus_ai_camera_defconfig]="k230d_labplus_ai_camera"
             [k230d_canmv_labplus_ai_camera_v2_defconfig]="k230d_labplus_ai_camera_v2"
+            [k230d_canmv_lushanpi_lite_defconfig]="k230d_lushanpi_lite"
           )
 
           echo "Defconfigs: ${!defconfig_to_board[@]}"

@@ -30,6 +30,8 @@
 #include <common.h>
 #include <cpu_func.h>
 #include <dm/device-internal.h>
+#include <dm/read.h>
+#include <dm/uclass.h>
 #include <gzip.h>
 #include <image.h>
 #include <linux/delay.h>
@@ -504,24 +506,48 @@ static inline bool mtd_is_aligned_with_block_size(struct mtd_info* mtd, u64 size
 #endif
 
 #if defined(CONFIG_MMC)
+static fdt_addr_t k230_get_boot_mmc_addr(void)
+{
+    switch (g_boot_medium) {
+    case BOOT_MEDIUM_SDIO0:
+        return 0x91580000;
+    case BOOT_MEDIUM_SDIO1:
+        return 0x91581000;
+    default:
+        return FDT_ADDR_T_NONE;
+    }
+}
+
 static int k230_mmc_init(void)
 {
     int ret = 0;
 
     if (!pblk_desc) {
-        struct mmc *mmc = NULL;
+        struct udevice* dev = NULL;
+        struct mmc*     mmc = NULL;
 
-        if (mmc_init_device(g_boot_medium - BOOT_MEDIUM_SDIO0)) {
+        fdt_addr_t boot_mmc_addr = k230_get_boot_mmc_addr();
+
+        if (boot_mmc_addr == FDT_ADDR_T_NONE) {
             ret = -1;
             goto out;
         }
 
-        mmc = find_mmc_device(g_boot_medium - BOOT_MEDIUM_SDIO0);
+        for (uclass_first_device(UCLASS_MMC, &dev); dev; uclass_next_device(&dev)) {
+            if (dev_read_addr(dev) != boot_mmc_addr) {
+                continue;
+            }
+
+            mmc = mmc_get_mmc_dev(dev);
+            break;
+        }
 
         if (NULL == mmc) {
             ret = -2;
             goto out;
         }
+
+        mmc->user_speed_mode = MMC_MODES_END;
 
         if (mmc_init(mmc)) {
             ret = -3;

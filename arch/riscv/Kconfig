@@ -117,6 +117,11 @@ config TARGET_K230_CANMV_MRT
 	bool "Support K230 CanMV MRT"
 	select SYS_CACHE_SHIFT_6
 
+config TARGET_K230D_CANMV_LUSHANPI_LITE
+	bool "Support K230D Lushanpi Lite"
+	select DDR_K230D
+	select SYS_CACHE_SHIFT_6
+
 endchoice
 
 config SYS_ICACHE_OFF
@@ -174,6 +179,7 @@ source "board/kendryte/k230d_labplus_ai_camera/Kconfig"
 source "board/kendryte/k230d_labplus_ai_camera_v2/Kconfig"
 source "board/kendryte/k230_labplus_1956/Kconfig"
 source "board/kendryte/k230_canmv_mrt/Kconfig"
+source "board/kendryte/k230d_canmv_lushanpi_lite/Kconfig"
 
 # platform-specific options below
 source "arch/riscv/cpu/ax25/Kconfig"
