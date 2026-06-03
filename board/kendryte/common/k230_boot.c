@@ -695,7 +695,8 @@ static int k230_parse_toc(void *toc_buf)
 	for (int i = 0; i < K230_TOC_MAX_ENTRIES; i++) {
         struct k230_toc_entry *dst = &toc.entries[toc.entry_count];
 
-		if (src->name[0] == '\0') {
+        /* SPI-NAND keeps unwritten TOC slots erased as 0xff. */
+        if ((src->name[0] == '\0') || ((u8)src->name[0] == 0xff)) {
 			break;
 		}
 
