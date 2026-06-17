@@ -39,5 +39,6 @@
 
 &mmc0 {
 	1-8-v;
+	//non-removable;
 	status = "okay";
 };

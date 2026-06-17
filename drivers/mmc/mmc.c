@@ -30,6 +30,32 @@
 
 static int mmc_set_signal_voltage(struct mmc *mmc, uint signal_voltage);
 
+static bool mmc_is_nonremovable_emmc(struct mmc *mmc)
+{
+	return !mmc_host_is_spi(mmc) &&
+	       (mmc->cfg->host_caps & MMC_CAP_NONREMOVABLE) &&
+	       (mmc->cfg->host_caps & MMC_MODE_8BIT);
+}
+
+static unsigned int mmc_go_idle_pre_delay_us(struct mmc *mmc)
+{
+#if defined(CONFIG_MMC_SDHCI_SNPS)
+	return mmc_is_nonremovable_emmc(mmc) ? 1000 : 4000;
+#else
+	return 1000;
+#endif
+}
+
+static unsigned int mmc_go_idle_post_delay_us(struct mmc *mmc)
+{
+	return mmc_is_nonremovable_emmc(mmc) ? 0 : 2000;
+}
+
+static unsigned int mmc_power_cycle_delay_us(struct mmc *mmc)
+{
+	return mmc_is_nonremovable_emmc(mmc) ? 1000 : 2000;
+}
+
 #if !CONFIG_IS_ENABLED(DM_MMC)
 
 static int mmc_wait_dat0(struct mmc *mmc, int state, int timeout_us)
@@ -512,12 +538,10 @@ static int mmc_go_idle(struct mmc *mmc)
 {
 	struct mmc_cmd cmd;
 	int err;
+	unsigned int delay_us;
 
-#if defined (CONFIG_MMC_SDHCI_SNPS)
-	udelay(4000);
-#else
-	udelay(1000);
-#endif
+	delay_us = mmc_go_idle_pre_delay_us(mmc);
+	udelay(delay_us);
 
 	cmd.cmdidx = MMC_CMD_GO_IDLE_STATE;
 	cmd.cmdarg = 0;
@@ -528,7 +552,9 @@ static int mmc_go_idle(struct mmc *mmc)
 	if (err)
 		return err;
 
-	udelay(2000);
+	delay_us = mmc_go_idle_post_delay_us(mmc);
+	if (delay_us)
+		udelay(delay_us);
 
 	return 0;
 }
@@ -696,14 +722,15 @@ static int mmc_send_op_cond_iter(struct mmc *mmc, int use_arg)
 	return 0;
 }
 
-static int mmc_send_op_cond(struct mmc *mmc)
+static int mmc_send_op_cond(struct mmc *mmc, bool send_idle)
 {
 	int err, i;
 	int timeout = 1000;
 	uint start;
 
 	/* Some cards seem to need this */
-	mmc_go_idle(mmc);
+	if (send_idle)
+		mmc_go_idle(mmc);
 
 	start = get_timer(0);
 	/* Asking to the card its capabilities */
@@ -2599,6 +2626,17 @@ static int mmc_startup(struct mmc *mmc)
 	}
 
 	/*
+	 * Reading EXT_CSD at the initial clock is slow on K230 eMMC. Once the
+	 * card reaches transfer state, use the CSD legacy rate before CMD8.
+	 */
+	if (!IS_SD(mmc) && !mmc_host_is_spi(mmc) &&
+	    mmc->legacy_speed > mmc->clock) {
+		err = mmc_set_clock(mmc, mmc->legacy_speed, false);
+		if (err)
+			return err;
+	}
+
+	/*
 	 * For SD, its erase group is always one sector
 	 */
 #if CONFIG_IS_ENABLED(MMC_WRITE)
@@ -2788,6 +2826,7 @@ static int mmc_power_off(struct mmc *mmc)
 static int mmc_power_cycle(struct mmc *mmc)
 {
 	int ret;
+	unsigned int delay_us;
 
 	ret = mmc_power_off(mmc);
 	if (ret)
@@ -2801,13 +2840,15 @@ static int mmc_power_cycle(struct mmc *mmc)
 	 * SD spec recommends at least 1ms of delay. Let's wait for 2ms
 	 * to be on the safer side.
 	 */
-	udelay(2000);
+	delay_us = mmc_power_cycle_delay_us(mmc);
+	udelay(delay_us);
 	return mmc_power_on(mmc);
 }
 
 int mmc_get_op_cond(struct mmc *mmc, bool quiet)
 {
 	bool uhs_en = supports_uhs(mmc->cfg->host_caps);
+	bool skip_sd_probe = false;
 	int err;
 
 	if (mmc->has_init)
@@ -2864,20 +2905,25 @@ retry:
 	/* The internal partition reset to user partition(0) at every CMD0 */
 	mmc_get_blk_desc(mmc)->hwpart = 0;
 
-	/* Test for SD version 2 */
-	err = mmc_send_if_cond(mmc);
+	skip_sd_probe = mmc_is_nonremovable_emmc(mmc);
+	if (!skip_sd_probe) {
+		/* Test for SD version 2 */
+		err = mmc_send_if_cond(mmc);
 
-	/* Now try to get the SD card's operating condition */
-	err = sd_send_op_cond(mmc, uhs_en);
-	if (err && uhs_en) {
-		uhs_en = false;
-		mmc_power_cycle(mmc);
-		goto retry;
+		/* Now try to get the SD card's operating condition */
+		err = sd_send_op_cond(mmc, uhs_en);
+		if (err && uhs_en) {
+			uhs_en = false;
+			mmc_power_cycle(mmc);
+			goto retry;
+		}
+	} else {
+		err = -ETIMEDOUT;
 	}
 
 	/* If the command timed out, we check for an MMC card */
 	if (err == -ETIMEDOUT) {
-		err = mmc_send_op_cond(mmc);
+		err = mmc_send_op_cond(mmc, !skip_sd_probe);
 
 		if (err) {
 #if !defined(CONFIG_SPL_BUILD) || defined(CONFIG_SPL_LIBCOMMON_SUPPORT)

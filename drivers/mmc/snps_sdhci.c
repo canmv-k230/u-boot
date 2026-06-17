@@ -11,6 +11,8 @@
 #include <sdhci.h>
 #include <linux/delay.h>
 
+#define SNPS_SDHCI_MIN_FREQ 400000
+
 struct snps_sdhci_plat {
 	struct mmc_config cfg;
 	struct mmc mmc;
@@ -269,7 +271,7 @@ static int snps_sdhci_probe(struct udevice *dev)
 	host->mmc->priv = host;
 	upriv->mmc = host->mmc;
 
-	ret = sdhci_setup_cfg(cfg, host, cfg->f_max, 0);
+	ret = sdhci_setup_cfg(cfg, host, cfg->f_max, SNPS_SDHCI_MIN_FREQ);
 	if (ret)
 		goto err;
 	
