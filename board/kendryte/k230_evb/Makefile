@@ -45,8 +45,8 @@ $(obj)/lpddr4_32_swap_1066.lex.c: $(src)/lpddr4_32_swap_1066.c $(BOARD_COMMON_DI
 	$(Q)($(BOARD_COMMON_DIR)/ddr.sh $< $@ 0x50000 0x53fff 0x54000 0x5433d || exit 1)
 
 
-obj-$(CONFIG_EVB_LPDDR4_1066_WITHOUT_ODT) += lpddr4_32_swap_1066.lex.o
-$(obj)/lpddr4_32_swap_1066.lex.c: $(src)/lpddr4_32_swap_1066_without_odt.c $(BOARD_COMMON_DIR)/ddr.sh
+obj-$(CONFIG_EVB_LPDDR4_1066_WITHOUT_ODT) += lpddr4_32_swap_1066_without_odt.lex.o
+$(obj)/lpddr4_32_swap_1066_without_odt.lex.c: $(src)/lpddr4_32_swap_1066_without_odt.c $(BOARD_COMMON_DIR)/ddr.sh
 	$(Q)($(BOARD_COMMON_DIR)/ddr.sh $< $@ 0x50000 0x53fff 0x54000 0x5433d || exit 1)
 
 
