@@ -25,6 +25,8 @@ struct snps_sdhci_plat {
 
 #define DWC_MSHC_PTR_VENDOR1		0x500
 #define DWC_MSHC_CTRL_R			(DWC_MSHC_PTR_VENDOR1 + 0x8)
+#define DWC_MSHC_EMMC_CTRL_R		(DWC_MSHC_PTR_VENDOR1 + 0x2c)
+#define DWC_MSHC_CARD_IS_EMMC		BIT(0)
 
 #ifdef MMC_SUPPORTS_TUNING
 #define DWC_MSHC_AT_CTRL_R		(DWC_MSHC_PTR_VENDOR1 + 0x40)
@@ -44,7 +46,7 @@ struct snps_sdhci_plat {
 	(0x3 << SDHCI_TUNE_POST_CHANGE_DLY_LSB)
 #define SDHCI_TUNE_SWIN_TH_VAL_LSB 24
 #define SDHCI_TUNE_SWIN_TH_VAL_MASK \
-	(0xff << SDHCI_TUNE_SWIN_TH_VAL_LSB)
+	(0xffU << SDHCI_TUNE_SWIN_TH_VAL_LSB)
 #define SDHCI_TUNE_PRE_CHANGE_DLY_VAL 0x1
 #define SDHCI_TUNE_POST_CHANGE_DLY_VAL 0x3
 #define SDHCI_TUNE_SWIN_TH_VAL 0x9
@@ -80,12 +82,12 @@ struct snps_sdhci_plat {
 #define DWC_MSHC_SMPLDL_CNFG		(DWC_MSHC_PTR_PHY_REGS + 0x20)
 #define DWC_MSHC_SDCLKDL_EXTDLY_EN	BIT(0)
 #define DWC_MSHC_SDCLKDL_UPDATE		BIT(4)
+#define DWC_MSHC_RX_EXTDLY_EN		BIT(0)
 #define DWC_MSHC_EXT_DELAY_OFFSET	128
 #define DWC_MSHC_MAX_DELAY		255
+#define DWC_MSHC_HS_SDR_MAX_HZ		52000000U
 
-#ifdef MMC_SUPPORTS_TUNING
 #define DWC_MSHC_ATDL_CNFG		(DWC_MSHC_PTR_PHY_REGS + 0x21)
-#endif
 
 #define DWC_MSHC_PHY_PAD_SD_CLK                                                \
 	((1 << TXSLEW_N_LSB) | (3 << TXSLEW_P_LSB) | (1 << WEAKPULL_EN_LSB) |  \
@@ -189,6 +191,58 @@ static int dwcmshc_phy_delay_config(struct sdhci_host *host)
 }
 
 #ifdef MMC_SUPPORTS_TUNING
+static int k230_sdhci_set_delay_mode(struct sdhci_host *host)
+{
+	u32 tx_delay = 0xb0;
+	u32 rx_delay = 0xd;
+	u8 tx, rx, drift;
+	u8 next_tx, next_rx, next_drift;
+	u16 clk;
+	bool variable_only;
+
+	if (host->ioaddr != (void *)K230_MMC0_BASE ||
+	    !host->mmc->version || IS_SD(host->mmc))
+		return 0;
+	dev_read_u32(host->mmc->dev, "tx_delay_line", &tx_delay);
+	dev_read_u32(host->mmc->dev, "rx_delay_line", &rx_delay);
+	if (tx_delay > DWC_MSHC_MAX_DELAY || rx_delay > DWC_MSHC_MAX_DELAY)
+		return -EINVAL;
+	variable_only = host->mmc->selected_mode == MMC_HS_200 &&
+			host->mmc->clock > DWC_MSHC_HS_SDR_MAX_HZ;
+	tx = sdhci_readb(host, DWC_MSHC_SDCLKDL_CNFG);
+	rx = sdhci_readb(host, DWC_MSHC_SMPLDL_CNFG);
+	drift = sdhci_readb(host, DWC_MSHC_ATDL_CNFG);
+	next_tx = tx & ~DWC_MSHC_SDCLKDL_EXTDLY_EN;
+	if (!variable_only && tx_delay >= DWC_MSHC_EXT_DELAY_OFFSET)
+		next_tx |= DWC_MSHC_SDCLKDL_EXTDLY_EN;
+	next_rx = rx & ~DWC_MSHC_RX_EXTDLY_EN;
+	if (!variable_only)
+		next_rx |= rx_delay & DWC_MSHC_RX_EXTDLY_EN;
+	next_drift = (drift & ~DWC_MSHC_RX_EXTDLY_EN) |
+		     (next_rx & DWC_MSHC_RX_EXTDLY_EN);
+	if (tx == next_tx && rx == next_rx && drift == next_drift)
+		return 0;
+
+	/*
+	 * Fixed delay extensions are for low clocks. Preserve variable taps
+	 * and routing, gate the card clock while switching ranges, and hold
+	 * TX update for at least 12.5 ns.
+	 */
+	clk = sdhci_readw(host, SDHCI_CLOCK_CONTROL);
+	sdhci_writew(host, clk & ~SDHCI_CLOCK_CARD_EN, SDHCI_CLOCK_CONTROL);
+	udelay(1);
+	sdhci_writeb(host, tx | DWC_MSHC_SDCLKDL_UPDATE, DWC_MSHC_SDCLKDL_CNFG);
+	udelay(1);
+	sdhci_writeb(host, next_tx | DWC_MSHC_SDCLKDL_UPDATE, DWC_MSHC_SDCLKDL_CNFG);
+	sdhci_writeb(host, next_rx, DWC_MSHC_SMPLDL_CNFG);
+	sdhci_writeb(host, next_drift, DWC_MSHC_ATDL_CNFG);
+	udelay(1);
+	sdhci_writeb(host, next_tx, DWC_MSHC_SDCLKDL_CNFG);
+	udelay(1);
+	sdhci_writew(host, clk, SDHCI_CLOCK_CONTROL);
+	return 0;
+}
+
 static int k230_sdhci_reset(struct sdhci_host *host, u8 mask)
 {
 	unsigned int timeout = 100;
@@ -222,6 +276,7 @@ static int k230_sdhci_wait_bus_idle(struct sdhci_host *host)
 static int k230_sdhci_config_tuning_engine(struct sdhci_host *host)
 {
 	u16 clk;
+	u16 ctrl2;
 	u16 stopped_clk;
 	u32 val;
 	unsigned int timeout;
@@ -230,7 +285,17 @@ static int k230_sdhci_config_tuning_engine(struct sdhci_host *host)
 	stopped_clk = clk & ~SDHCI_CLOCK_CARD_EN;
 	sdhci_writew(host, stopped_clk, SDHCI_CLOCK_CONTROL);
 
-	sdhci_writeb(host, 0xc, DWC_MSHC_ATDL_CNFG);
+	/* AT_CTRL threshold fields require SAMPLE_CLK_SEL to be clear. */
+	ctrl2 = sdhci_readw(host, SDHCI_HOST_CONTROL2);
+	ctrl2 &= ~(SDHCI_CTRL_EXEC_TUNING | SDHCI_CTRL_TUNED_CLK);
+	sdhci_writew(host, ctrl2, SDHCI_HOST_CONTROL2);
+	/*
+	 * Sampling and drift-monitor delay lines must have matching phase
+	 * ranges. Both use the TX reference as input (INPSEL=3); retain the
+	 * sampling line's fixed 128-stage extension in the drift path too.
+	 */
+	sdhci_writeb(host, 0xc | (sdhci_readb(host, DWC_MSHC_SMPLDL_CNFG) &
+			       DWC_MSHC_RX_EXTDLY_EN), DWC_MSHC_ATDL_CNFG);
 	val = sdhci_readl(host, DWC_MSHC_AT_CTRL_R);
 	val &= ~(SDHCI_TUNE_CI_SEL | SDHCI_TUNE_RPT_TUNE_ERR |
 		 SDHCI_TUNE_SW_TUNE_EN | SDHCI_TUNE_WIN_EDGE_SEL_MASK |
@@ -244,8 +309,17 @@ static int k230_sdhci_config_tuning_engine(struct sdhci_host *host)
 		(SDHCI_TUNE_POST_CHANGE_DLY_VAL <<
 		 SDHCI_TUNE_POST_CHANGE_DLY_LSB) |
 		(SDHCI_TUNE_SWIN_TH_VAL << SDHCI_TUNE_SWIN_TH_VAL_LSB);
+	/*
+	 * The variable delay chain can take 11.8 ns, exceeding two cycles
+	 * at 200 MHz. Allow four cycles with PRE_CHANGE_DLY=3.
+	 */
+	if (!(sdhci_readb(host, DWC_MSHC_SMPLDL_CNFG) & DWC_MSHC_RX_EXTDLY_EN)) {
+		val &= ~SDHCI_TUNE_PRE_CHANGE_DLY_MASK;
+		val |= 3U << SDHCI_TUNE_PRE_CHANGE_DLY_LSB;
+	}
 	sdhci_writel(host, val, DWC_MSHC_AT_CTRL_R);
-	sdhci_writel(host, 0, DWC_MSHC_AT_STAT_R);
+	/* AT_STAT contains phase codes, not sticky errors. Its center code is
+	 * writable only with SW_TUNE_EN, which is disabled above. */
 
 	sdhci_writew(host, clk, SDHCI_CLOCK_CONTROL);
 	if (!(clk & SDHCI_CLOCK_INT_EN))
@@ -264,16 +338,24 @@ static int k230_sdhci_config_tuning_engine(struct sdhci_host *host)
 
 static void k230_sdhci_reset_tuning(struct sdhci_host *host)
 {
+	u16 clk;
 	u16 ctrl2;
+	u32 val;
 
+	/* AT_EN may only change with the card clock stopped. */
+	clk = sdhci_readw(host, SDHCI_CLOCK_CONTROL);
+	sdhci_writew(host, clk & ~SDHCI_CLOCK_CARD_EN, SDHCI_CLOCK_CONTROL);
 	ctrl2 = sdhci_readw(host, SDHCI_HOST_CONTROL2);
 	ctrl2 &= ~(SDHCI_CTRL_EXEC_TUNING | SDHCI_CTRL_TUNED_CLK);
 	sdhci_writew(host, ctrl2, SDHCI_HOST_CONTROL2);
+	val = sdhci_readl(host, DWC_MSHC_AT_CTRL_R);
+	sdhci_writel(host, val & ~(SDHCI_TUNE_AT_EN | SDHCI_TUNE_RPT_TUNE_ERR),
+		     DWC_MSHC_AT_CTRL_R);
+	sdhci_writew(host, clk, SDHCI_CLOCK_CONTROL);
 }
 
 static int k230_sdhci_send_tuning_cmd(struct sdhci_host *host, u8 opcode)
 {
-	u32 scratch = 0;
 	u32 stat;
 	u16 block_size;
 	u16 block_size_reg;
@@ -281,7 +363,6 @@ static int k230_sdhci_send_tuning_cmd(struct sdhci_host *host, u8 opcode)
 	u16 flags;
 	ulong start;
 	int ret;
-	unsigned int i;
 
 	ret = k230_sdhci_wait_bus_idle(host);
 	if (ret)
@@ -313,9 +394,10 @@ static int k230_sdhci_send_tuning_cmd(struct sdhci_host *host, u8 opcode)
 			return -ETIMEDOUT;
 	} while (!(stat & SDHCI_INT_DATA_AVAIL));
 
-	for (i = 0; i < block_size / sizeof(u32); i++)
-		scratch = sdhci_readl(host, SDHCI_BUFFER);
-	(void)scratch;
+	/*
+	 * The tuning engine consumes the pattern; DATA_AVAIL is completion,
+	 * not a request to drain the normal PIO FIFO.
+	 */
 
 	return 0;
 }
@@ -330,7 +412,6 @@ static int k230_sdhci_execute_tuning(struct mmc *mmc, u8 opcode)
 	ulong start;
 	bool tuning_done = false;
 	int ret;
-	unsigned int i;
 	unsigned int attempts = 0;
 
 	if (opcode != MMC_CMD_SEND_TUNING_BLOCK_HS200)
@@ -344,14 +425,15 @@ static int k230_sdhci_execute_tuning(struct mmc *mmc, u8 opcode)
 	ret = k230_sdhci_config_tuning_engine(host);
 	if (ret) {
 		dev_err(mmc->dev, "failed to configure HS200 tuning: %d\n", ret);
+		k230_sdhci_reset_tuning(host);
 		goto restore_interrupts;
 	}
 
-	sdhci_writel(host, old_int_enable | SDHCI_INT_DATA_AVAIL |
-		     SDHCI_INT_CMD_MASK | SDHCI_INT_DATA_MASK,
-		     SDHCI_INT_ENABLE);
-	sdhci_writel(host, old_signal_enable | SDHCI_INT_DATA_AVAIL |
-		     SDHCI_INT_ERROR, SDHCI_SIGNAL_ENABLE);
+	/* SDHCI hardware tuning reports only Buffer Read Ready. Missing replies
+	 * are bounded by the 50 ms per-command wait, not just the overall limit. */
+	sdhci_writel(host, SDHCI_INT_DATA_AVAIL, SDHCI_INT_ENABLE);
+	sdhci_writel(host, SDHCI_INT_DATA_AVAIL, SDHCI_SIGNAL_ENABLE);
+	sdhci_writel(host, SDHCI_INT_ALL_MASK, SDHCI_INT_STATUS);
 
 	ctrl2 = sdhci_readw(host, SDHCI_HOST_CONTROL2);
 	ctrl2 &= ~SDHCI_CTRL_TUNED_CLK;
@@ -360,7 +442,7 @@ static int k230_sdhci_execute_tuning(struct mmc *mmc, u8 opcode)
 
 	start = get_timer(0);
 	ret = -ETIMEDOUT;
-	for (i = 0; i < SDHCI_TUNING_LOOP_COUNT; i++) {
+	while (attempts < SDHCI_TUNING_LOOP_COUNT) {
 		if (get_timer(start) >= SDHCI_TUNING_TOTAL_TIMEOUT_MS)
 			break;
 
@@ -397,9 +479,11 @@ static int k230_sdhci_execute_tuning(struct mmc *mmc, u8 opcode)
 	}
 
 restore_interrupts:
+	/* Acknowledge stale tuning status before restoring normal IRQs. */
+	sdhci_writel(host, 0, SDHCI_SIGNAL_ENABLE);
+	sdhci_writel(host, SDHCI_INT_ALL_MASK, SDHCI_INT_STATUS);
 	sdhci_writel(host, old_int_enable, SDHCI_INT_ENABLE);
 	sdhci_writel(host, old_signal_enable, SDHCI_SIGNAL_ENABLE);
-	sdhci_writel(host, SDHCI_INT_ALL_MASK, SDHCI_INT_STATUS);
 
 	return ret;
 }
@@ -449,7 +533,21 @@ static int dwcmshc_phy_init(struct sdhci_host *host)
 static void k230_sdhci_set_control_reg(struct sdhci_host *host)
 {
 #ifdef CONFIG_MMC_SDHCI_SNPS
-	/* MMC0 has its own eMMC PHY; MSHC_CTRL_R belongs to the SDIO path. */
+	/*
+	 * Card identification precedes bus-width/timing selection. The eMMC
+	 * engine (including CMD21) needs CARD_IS_EMMC; keep reset bits intact.
+	 */
+	if (host->ioaddr == (void *)K230_MMC0_BASE && host->mmc->version) {
+		u16 ctrl = sdhci_readw(host, DWC_MSHC_EMMC_CTRL_R);
+
+		if (IS_SD(host->mmc))
+			ctrl &= ~DWC_MSHC_CARD_IS_EMMC;
+		else
+			ctrl |= DWC_MSHC_CARD_IS_EMMC;
+		sdhci_writew(host, ctrl, DWC_MSHC_EMMC_CTRL_R);
+	}
+
+	/* Keep the existing SDIO-path command-conflict setting. */
 	if (host->ioaddr != (void *)K230_MMC0_BASE)
 		sdhci_writeb(host, 0, DWC_MSHC_CTRL_R);
 
@@ -462,10 +560,42 @@ static void k230_sdhci_set_control_reg(struct sdhci_host *host)
 #endif
 
 	sdhci_set_uhs_timing(host);
+	/*
+	 * DWC uses eMMC mode encodings once CARD_IS_EMMC is set. Encoding 2
+	 * (generic SDHCI's HS52 mapping) is reserved; HS SDR uses encoding 1.
+	 */
+	if (host->ioaddr == (void *)K230_MMC0_BASE &&
+	    host->mmc->version && !IS_SD(host->mmc) &&
+	    (host->mmc->selected_mode == MMC_HS ||
+	     host->mmc->selected_mode == MMC_HS_52)) {
+		u16 ctrl = sdhci_readw(host, SDHCI_HOST_CONTROL2);
+
+		ctrl &= ~SDHCI_CTRL_UHS_MASK;
+		ctrl |= SDHCI_CTRL_UHS_SDR25;
+		sdhci_writew(host, ctrl, SDHCI_HOST_CONTROL2);
+	}
+}
+
+static int k230_sdhci_set_ios_post(struct sdhci_host *host)
+{
+	/* Generic U-Boot 2022.10 omits MMC_HS_52 from the HISPD mode list. */
+	if (host->ioaddr == (void *)K230_MMC0_BASE &&
+	    host->mmc->version && !IS_SD(host->mmc) &&
+	    host->mmc->selected_mode == MMC_HS_52) {
+		u8 ctrl = sdhci_readb(host, SDHCI_HOST_CONTROL);
+
+		sdhci_writeb(host, ctrl | SDHCI_CTRL_HISPD, SDHCI_HOST_CONTROL);
+	}
+#ifdef MMC_SUPPORTS_TUNING
+	return k230_sdhci_set_delay_mode(host);
+#else
+	return 0;
+#endif
 }
 
 static const struct sdhci_ops k230_host_ops = {
 	.set_control_reg = k230_sdhci_set_control_reg,
+	.set_ios_post = k230_sdhci_set_ios_post,
 #ifdef MMC_SUPPORTS_TUNING
 	.platform_execute_tuning = k230_sdhci_execute_tuning,
 #endif

@@ -730,6 +730,15 @@ config SYS_NS16550
 	  be used. It can be a constant or a function to get clock, eg,
 	  get_serial_clock().
 
+config NS16550_K230_DLF
+	bool "Use K230 NS16550 fractional baud divisor"
+	depends on SYS_NS16550 && KENDRYTE_K230 && DM_SERIAL
+	default y
+	help
+	  Program the K230 DesignWare UART's four-bit fractional divisor.
+	  This permits high baud rates such as 2000000 with the 50 MHz UART
+	  clock, which an integer-only divisor cannot approximate accurately.
+
 config NS16550_DYNAMIC
 	bool "Allow NS16550 to be configured at runtime"
 	default y if SYS_COREBOOT || SYS_SLIMBOOTLOADER

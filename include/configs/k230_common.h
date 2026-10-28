@@ -34,6 +34,11 @@
 
 #define CONFIG_SYS_NS16550_MEM32
 
+/* Keep the SDK-selected console rate valid when importing the environment.
+ * A duplicate standard rate is intentional: consumers test membership. */
+#define CONFIG_SYS_BAUDRATE_TABLE \
+	{ 9600, 19200, 38400, 57600, 115200, CONFIG_BAUDRATE }
+
 #ifdef CONFIG_SPL_BUILD
 #define CONFIG_SPL_PANIC_ON_RAW_IMAGE
 #endif 

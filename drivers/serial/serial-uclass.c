@@ -331,16 +331,24 @@ int serial_tstc(void)
 	return _serial_tstc(gd->cur_serial_dev);
 }
 
-void serial_setbrg(void)
+static int serial_setbrg_result(void)
 {
 	struct dm_serial_ops *ops;
 
+	/* Early environment import may precede console selection. Keep the
+	 * requested rate in gd; serial_post_probe() applies it to the device. */
 	if (!gd->cur_serial_dev)
-		return;
+		return 0;
 
 	ops = serial_get_ops(gd->cur_serial_dev);
 	if (ops->setbrg)
-		ops->setbrg(gd->cur_serial_dev, gd->baudrate);
+		return ops->setbrg(gd->cur_serial_dev, gd->baudrate);
+	return 0;
+}
+
+void serial_setbrg(void)
+{
+	serial_setbrg_result();
 }
 
 int serial_getconfig(struct udevice *dev, uint *config)
@@ -420,6 +428,7 @@ static int on_baudrate(const char *name, const char *value, enum env_op op,
 {
 	int i;
 	int baudrate;
+	unsigned long old_baudrate;
 
 	switch (op) {
 	case env_op_create:
@@ -449,9 +458,14 @@ static int on_baudrate(const char *name, const char *value, enum env_op op,
 			udelay(50000);
 		}
 
+		old_baudrate = gd->baudrate;
 		gd->baudrate = baudrate;
-
-		serial_setbrg();
+		if (serial_setbrg_result()) {
+			/* Reject the environment update if hardware kept the old rate. */
+			gd->baudrate = old_baudrate;
+			/* himport_r() skips this entry and continues with other keys. */
+			return 1;
+		}
 
 		udelay(50000);
 

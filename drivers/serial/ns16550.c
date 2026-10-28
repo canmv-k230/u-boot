@@ -16,6 +16,7 @@
 #include <watchdog.h>
 #include <asm/global_data.h>
 #include <linux/err.h>
+#include <linux/delay.h>
 #include <linux/types.h>
 #include <asm/io.h>
 
@@ -224,8 +225,28 @@ static void ns16550_setbrg(struct ns16550 *com_port, int baud_divisor)
 	serial_out(lcr_val, &com_port->lcr);
 }
 
-void ns16550_init(struct ns16550 *com_port, int baud_divisor)
+#ifdef CONFIG_NS16550_K230_DLF
+static int ns16550_k230_wait_tx_empty(struct ns16550 *com_port)
 {
+	/* K230 SPL runs spl_early_init() and riscv_cpu_setup() before console
+	 * init, binding the RISC-V timer. U-Boot proper also sets up DM/CPUs
+	 * first. udelay() may lazily probe that timer; it requires DM here. */
+	unsigned int timeout_us = 100000;
+
+	while (!(serial_in(&com_port->lsr) & UART_LSR_TEMT)) {
+		if (!timeout_us--)
+			return -ETIMEDOUT;
+		udelay(1);
+	}
+	return 0;
+}
+#endif
+
+static int ns16550_init_port(struct ns16550 *com_port, int baud_divisor)
+{
+#ifdef CONFIG_NS16550_K230_DLF
+	int ret;
+#endif
 #if (defined(CONFIG_SPL_BUILD) && \
 		(defined(CONFIG_OMAP34XX) || defined(CONFIG_OMAP44XX)))
 	/*
@@ -248,8 +269,14 @@ void ns16550_init(struct ns16550 *com_port, int baud_divisor)
 	}
 #endif
 
+#ifdef CONFIG_NS16550_K230_DLF
+	ret = ns16550_k230_wait_tx_empty(com_port);
+	if (ret)
+		return ret;
+#else
 	while (!(serial_in(&com_port->lsr) & UART_LSR_TEMT))
 		;
+#endif
 
 	serial_out(CONFIG_SYS_NS16550_IER, &com_port->ier);
 #if defined(CONFIG_ARCH_OMAP2PLUS) || defined(CONFIG_OMAP_SERIAL)
@@ -270,6 +297,13 @@ void ns16550_init(struct ns16550 *com_port, int baud_divisor)
 #if defined(CONFIG_ARCH_KEYSTONE)
 	serial_out(UART_REG_VAL_PWREMU_MGMT_UART_ENABLE, &com_port->regC);
 #endif
+	return 0;
+}
+
+void ns16550_init(struct ns16550 *com_port, int baud_divisor)
+{
+	/* Preserve the legacy API; driver-model probe propagates errors. */
+	ns16550_init_port(com_port, baud_divisor);
 }
 
 #ifndef CONFIG_NS16550_MIN_FUNCTIONS
@@ -424,11 +458,36 @@ static int ns16550_serial_setbrg(struct udevice *dev, int baudrate)
 {
 	struct ns16550 *const com_port = dev_get_priv(dev);
 	struct ns16550_plat *plat = com_port->plat;
+#ifdef CONFIG_NS16550_K230_DLF
+	unsigned int divisor;
+	int lcr_val;
+	int ret;
+
+	if (baudrate <= 0 || plat->clock <= 0 || plat->reg_shift != 2)
+		return -EINVAL;
+
+	/* DLL/DLM hold the integer part. DLF holds sixteenths at register
+	 * index 0x30 (byte offset 0xc0 with K230's reg-shift=2). */
+	divisor = DIV_ROUND_CLOSEST(plat->clock, baudrate);
+	if (divisor < 16 || divisor > 0xfffff)
+		return -EINVAL;
+
+	ret = ns16550_k230_wait_tx_empty(com_port);
+	if (ret)
+		return ret;
+	lcr_val = serial_in(&com_port->lcr) & ~UART_LCR_BKSE;
+	serial_out(UART_LCR_BKSE | lcr_val, &com_port->lcr);
+	serial_out((divisor >> 4) & 0xff, &com_port->dll);
+	serial_out((divisor >> 12) & 0xff, &com_port->dlm);
+	ns16550_writeb(com_port, 0x30, divisor & 0xf);
+	serial_out(lcr_val, &com_port->lcr);
+#else
 	int clock_divisor;
 
 	clock_divisor = ns16550_calc_divisor(com_port, plat->clock, baudrate);
 
 	ns16550_setbrg(com_port, clock_divisor);
+#endif
 
 	return 0;
 }
@@ -525,9 +584,7 @@ int ns16550_serial_probe(struct udevice *dev)
 		reset_deassert_bulk(&reset_bulk);
 
 	com_port->plat = dev_get_plat(dev);
-	ns16550_init(com_port, -1);
-
-	return 0;
+	return ns16550_init_port(com_port, -1);
 }
 
 #if CONFIG_IS_ENABLED(OF_CONTROL)

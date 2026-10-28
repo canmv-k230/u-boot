@@ -24,6 +24,12 @@
  */
 /dts-v1/;
 #include <dt-bindings/pinctrl/k230-pinctrl.h>
+#include <linux/stringify.h>
+
+/* CONFIG_BAUDRATE is a decimal integer from Kconfig's int type (no
+ * parentheses or suffix). Expand it before appending the UART format. */
+#define K230_UART_OPTIONS_(baud) baud##n8
+#define K230_UART_OPTIONS(baud) K230_UART_OPTIONS_(baud)
 
 / {
 	model = "kendryte k230";
@@ -38,8 +44,8 @@
 	};
 
 	chosen {
-		bootargs = "console=ttyS0,115200n8 debug loglevel=7";
-		stdout-path = "uart0:115200n8";
+		bootargs = __stringify(console=ttyS0,K230_UART_OPTIONS(CONFIG_BAUDRATE) debug loglevel=7);
+		stdout-path = __stringify(uart0:K230_UART_OPTIONS(CONFIG_BAUDRATE));
 	};
 
 	cpus {
