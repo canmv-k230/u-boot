@@ -123,7 +123,10 @@ int spl_board_init_f(void) {
   spl_device_disable();
 
   /* init dram */
-  ddr_init_training();
+  ret = ddr_init_training();
+  if (ret)
+    return ret;
+
   /* Clear the BSS. */
   memset(__bss_start, 0, (ulong)&__bss_end - (ulong)__bss_start);
   detect_ddr_size();

@@ -127,7 +127,8 @@ extern uint64_t g_dram_size;
 unsigned long k230_get_encrypted_image_load_addr(void);
 unsigned long k230_get_encrypted_image_decrypt_addr(void);
 
-void board_ddr_init(void);
+/* Return a negative error code if DDR initialization or training fails. */
+int board_ddr_init(void);
 int  ddr_init_training(void);
 int k230_run_system(void);
 

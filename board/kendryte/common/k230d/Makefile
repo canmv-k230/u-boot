@@ -1,4 +1,5 @@
 BOARD_COMMON_DIR = $(srctree)/board/$(VENDOR)/common
+ccflags-y += -I$(BOARD_COMMON_DIR)
 
 obj-$(CONFIG_K230D_SIP_LPDDR4_1600) += gen_k230d_sip_lpddr4_32_swap_1600.lex.o
 obj-$(CONFIG_K230D_SIP_LPDDR4_1600_NODT) += gen_k230d_sip_lpddr4_32_swap_1600_nodt.lex.o

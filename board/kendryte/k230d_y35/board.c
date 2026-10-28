@@ -22,9 +22,7 @@ int ddr_init_training(void) {
     return 0;
   }
 
-  board_ddr_init();
-
-  return 0;
+  return board_ddr_init();
 }
 
 int board_early_init_f(void) {

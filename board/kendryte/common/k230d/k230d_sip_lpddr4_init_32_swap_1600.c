@@ -1,5 +1,7 @@
 #include <stdio.h>
 #include <asm/io.h>
+#include <linux/errno.h>
+#include "board_common.h"
 #include <common.h>
 //#include <k230.h>
 //#include <core_rv64.h>
@@ -18,7 +20,7 @@
        v =readl((const volatile void __iomem *) addr );  \
     }
 
-void board_ddr_init(void)
+int board_ddr_init(void)
 {
 int data;
 int train_data=0;
@@ -17793,7 +17795,7 @@ reg_write(   DDR_REG_BASE +   0x000d0099*4 +0x02000000 , 0x00000009  );
 reg_write(   DDR_REG_BASE +   0x000d0099*4 +0x02000000 , 0x00000001  );
 reg_write(   DDR_REG_BASE +   0x000d0099*4 +0x02000000 , 0x00000000  );
 
-while((train_data&0x7) !=0x07) {
+while (train_data != 0x07) {
 
  reg_read (   DDR_REG_BASE  + 0x000d0004*4 +0x02000000 ,  data       ); 
  while((data&0x1) !=0x0) {
@@ -17806,7 +17808,7 @@ while((train_data&0x7) !=0x07) {
 
  switch(train_data)
   {
-#ifndef CONFIG_FAST_BOOT_CONFIGURATION
+#ifndef CONFIG_FAST_BOOT_QUIET
   case 0x00000000: printf("%08X: PMU Major Msg: End of initialization                                         \n",train_data);break;
   case 0x00000001: printf("%08X: PMU Major Msg: End of fine write leveling                                    \n",train_data);break;
   case 0x00000002: printf("%08X: PMU Major Msg: End of read enable training                                   \n",train_data);break;
@@ -17826,7 +17828,9 @@ while((train_data&0x7) !=0x07) {
 #else
   case 0x00000000 ... 0x000000fe: break;
 #endif
-  case 0x000000ff: printf("%08X: PMU Major Msg: FATAL ERROR 1600.                                                  \n",train_data);break;
+  case 0x000000ff:
+    printf("%08X: PMU Major Msg: FATAL ERROR 1600.                                                  \n",train_data);
+    return -EIO;
   default:         printf("%08X: PMU Major Msg: Un-recognized message... !                                    \n",train_data);break;
   } 
 
@@ -18478,4 +18482,5 @@ reg_write( DDR_REG_BASE +  0x0000050 , 0x98210000 );
 
 
 
+    return 0;
 }

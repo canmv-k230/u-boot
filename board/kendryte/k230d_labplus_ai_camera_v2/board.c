@@ -18,17 +18,15 @@
 #include "board_common.h"
 
 int ddr_init_training(void) {
+  kd_pin_set_ddr(8, 1);
+  kd_pin_set_dr(8, 0);
+
   if (0x00 != (readl((const volatile void __iomem *)0x980001bcULL) & 0x1)) {
     // have init ,not need reinit;
     return 0;
   }
 
-  board_ddr_init();
-
-  kd_pin_set_ddr(8, 1);
-  kd_pin_set_dr(8, 0);
-
-  return 0;
+  return board_ddr_init();
 }
 
 int board_early_init_f(void) {
