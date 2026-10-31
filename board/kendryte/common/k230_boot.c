@@ -23,6 +23,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 #include <asm/asm.h>
+#include <asm/cache.h>
 #include <asm/io.h>
 #include <asm/spl.h>
 #include <asm/types.h>
@@ -89,8 +90,10 @@ struct k230_toc {
 };
 
 static struct k230_toc toc;
-static struct blk_desc *pblk_desc;
 static uint64_t rtapp_load_addr, rtapp_size, rttapp_loaded = 0;
+#if defined(CONFIG_MMC)
+static struct blk_desc *pblk_desc;
+#endif
 
 #define K230_DISABLE_NONE_SECURITY_MASK	0x1U
 #define K230_GCM_IV_LEN			12U
@@ -566,10 +569,175 @@ out:
 }
 #endif
 
+#if defined(CONFIG_MMC)
+/* Read exactly len bytes from a block-aligned offset. A partial last block
+ * goes through a bounce buffer so nothing past len is written. */
+static int k230_read_mmc(uint64_t offset, size_t len, void *buf)
+{
+    static u8 tail[BLKSZ] __aligned(ARCH_DMA_MINALIGN);
+    lbaint_t start, full;
+    size_t rest;
+
+    if (!pblk_desc)
+        return -ENODEV;
+    if (pblk_desc->blksz != BLKSZ || offset % BLKSZ) {
+        printf("%s: unaligned read: off=0x%llx blksz=%lu\n",
+               __func__, offset, pblk_desc->blksz);
+        return -EINVAL;
+    }
+
+    start = offset / BLKSZ;
+    full = len / BLKSZ;
+    rest = len % BLKSZ;
+    if (start > pblk_desc->lba ||
+        full + (rest ? 1 : 0) > pblk_desc->lba - start) {
+        printf("%s: read outside MMC: off=0x%llx len=0x%lx\n",
+               __func__, offset, (ulong)len);
+        return -EINVAL;
+    }
+
+    if (full && blk_dread(pblk_desc, start, full, buf) != full)
+        return -EIO;
+    if (rest) {
+        if (blk_dread(pblk_desc, start + full, 1, tail) != 1)
+            return -EIO;
+        memcpy((u8 *)buf + full * BLKSZ, tail, rest);
+    }
+
+    return 0;
+}
+#endif
+
+#if defined(CONFIG_SPI_FLASH) && (!defined(CONFIG_SPL_BUILD) || defined(CONFIG_SPL_SPI_FLASH_SUPPORT))
+static int k230_read_spi_nor(uint64_t offset, uint64_t limit, size_t len, void *buf)
+{
+    static struct spi_flash *flash;
+
+    if (!flash) {
+#if CONFIG_IS_ENABLED(DM_SPI_FLASH)
+        struct udevice *dev;
+        int ret;
+
+        /* Keep the DT clock and bus widths. The legacy probe API overrides
+         * the hardware with SF_DEFAULT_SPEED without updating the bus cache. */
+        ret = spi_flash_probe_bus_cs(CONFIG_SF_DEFAULT_BUS,
+                        CONFIG_SF_DEFAULT_CS, &dev);
+        if (ret) {
+            printf("%s: SPI NOR probe failed: %d\n", __func__, ret);
+            return ret;
+        }
+        flash = dev_get_uclass_priv(dev);
+#else
+        flash = spi_flash_probe(CONFIG_SF_DEFAULT_BUS, CONFIG_SF_DEFAULT_CS,
+                    CONFIG_SF_DEFAULT_SPEED, CONFIG_SF_DEFAULT_MODE);
+#endif
+        if (!flash) {
+            printf("%s: SPI NOR probe failed\n", __func__);
+            return -ENODEV;
+        }
+    }
+
+    if (limit > flash->size)
+        limit = flash->size;
+    /* Check before narrowing the TOC's 64-bit offset to the SPI API's u32. */
+    if (offset > limit || len > limit - offset) {
+        printf("%s: read outside SPI NOR: off=0x%llx len=0x%lx\n",
+               __func__, offset, (ulong)len);
+        return -EINVAL;
+    }
+
+    return spi_flash_read(flash, (u32)offset, len, buf);
+}
+#endif
+
+#if defined(CONFIG_MTD_SPI_NAND)
+/* Read exactly len bytes of data stored from a page-aligned offset, skipping
+ * bad blocks, without reading at or beyond limit. Corrected bitflips are not
+ * errors. */
+static int k230_read_spi_nand(uint64_t offset, uint64_t limit, size_t len, void *buf)
+{
+    struct mtd_info *mtd = get_mtd_by_name(SPINAND_NAME);
+    struct mtd_oob_ops op = {};
+    u8 *dst = buf;
+    int ret = 0;
+
+    if (IS_ERR_OR_NULL(mtd))
+        return -ENODEV;
+    if (limit > mtd->size)
+        limit = mtd->size;
+    if (offset % mtd->writesize) {
+        printf("%s: unaligned read: off=0x%llx page=0x%x\n",
+               __func__, offset, mtd->writesize);
+        ret = -EINVAL;
+        goto out;
+    }
+
+    op.mode = MTD_OPS_AUTO_OOB;
+    while (len) {
+        if (offset >= limit) {
+            printf("%s: read reached partition end at 0x%llx\n", __func__, offset);
+            ret = -EINVAL;
+            goto out;
+        }
+        if (mtd_is_aligned_with_block_size(mtd, offset) && mtd_block_isbad(mtd, offset)) {
+            offset += mtd->erasesize;
+            continue;
+        }
+
+        op.datbuf = dst;
+        op.len = min_t(size_t, len, mtd->writesize);
+        op.retlen = 0;
+        ret = mtd_read_oob(mtd, offset, &op);
+        if (ret && !mtd_is_bitflip(ret)) {
+            printf("%s: read error at 0x%llx: %d\n", __func__, offset, ret);
+            goto out;
+        }
+        if (op.retlen != op.len) {
+            ret = -EIO;
+            goto out;
+        }
+        ret = 0;
+        offset += mtd->writesize;
+        dst += op.len;
+        len -= op.len;
+    }
+
+out:
+    put_mtd_device(mtd);
+    return ret;
+}
+#endif
+
+/* Read len bytes at offset from the boot medium without crossing limit,
+ * the end of the region being read. */
+static int k230_read_medium(uint64_t offset, uint64_t limit, size_t len, void *buf)
+{
+    if (offset > limit || len > limit - offset) {
+        printf("%s: read outside region: off=0x%llx len=0x%lx end=0x%llx\n",
+               __func__, offset, (ulong)len, limit);
+        return -EINVAL;
+    }
+
+#if defined(CONFIG_MMC)
+    if ((BOOT_MEDIUM_SDIO0 == g_boot_medium) || (BOOT_MEDIUM_SDIO1 == g_boot_medium))
+        return k230_read_mmc(offset, len, buf);
+#endif
+#if defined(CONFIG_SPI_FLASH) && (!defined(CONFIG_SPL_BUILD) || defined(CONFIG_SPL_SPI_FLASH_SUPPORT))
+    if (g_boot_medium == BOOT_MEDIUM_NORFLASH)
+        return k230_read_spi_nor(offset, limit, len, buf);
+#endif
+#if defined(CONFIG_MTD_SPI_NAND)
+    if (g_boot_medium == BOOT_MEDIUM_NANDFLASH)
+        return k230_read_spi_nand(offset, limit, len, buf);
+#endif
+
+    printf("%s: Error, unsupport media type %d\n", __func__, g_boot_medium);
+    return -ENODEV;
+}
+
 static void *k230_read_toc(void)
 {
     int ret = 0;
-    ulong blk_count;
     void *toc_buf;
 
     memset(&toc, 0, sizeof(toc));
@@ -589,67 +757,13 @@ static void *k230_read_toc(void)
             printf("%s: k230_mmc_init fail: %d\n", __func__, ret);
             goto out;
         }
-
-        blk_count = (K230_TOC_MAX_ENTRIES * K230_TOC_ENTRY_SIZE + 511) / 512;
-
-        if (blk_dread(pblk_desc, K230_TOC_SECTOR, blk_count, toc_buf) != blk_count) {
-            printf("%s: Error: Failed to read TOC from MMC\n", __func__);
-            ret = -1;
-            goto out;
-        }
-    } else
-#endif
-
-#if defined(CONFIG_MTD_SPI_NAND)
-    if (g_boot_medium == BOOT_MEDIUM_NANDFLASH) {
-        static struct mtd_info *mtd;
-        struct mtd_oob_ops io_op = {};
-        size_t len = K230_TOC_MAX_ENTRIES * K230_TOC_ENTRY_SIZE;
-        size_t blocksize = 0;
-        size_t amount_loaded = 0;
-        size_t end = 0;
-        ulong off = 0;
-        u_char* buf = (u_char*)toc_buf;
-
-        mtd = get_mtd_by_name(SPINAND_NAME);
-        if (IS_ERR_OR_NULL(mtd)) {
-            printf("k230_load_sys_from_spi_nand error\n");
-            ret = -1;
-            goto out;
-
-        }
-        blocksize = mtd->erasesize;
-        off = K230_TOC_OFFSET;
-        end = off + len;
-
-        io_op.mode   = MTD_OPS_AUTO_OOB;
-        io_op.len    = mtd->writesize;
-        io_op.ooblen = 0;
-        io_op.oobbuf = NULL;
-
-        amount_loaded = 0;
-        while (off < end) {
-            if (mtd_is_aligned_with_block_size(mtd, off) && mtd_block_isbad(mtd, off)) {
-                off += blocksize;
-            } else {
-                io_op.datbuf = &buf[amount_loaded];
-                if (mtd_read_oob(mtd, off, &io_op)) {
-                    printf("%s: read firmware head error\n", __func__);
-                    ret = -1;
-                    put_mtd_device(mtd);
-                    goto out;
-                }
-
-                off += io_op.retlen;
-                amount_loaded += io_op.retlen;
-            }
-        }
-    } else
-#endif
-    {
-        ret = -1;
-        printf("%s: Error, unsupport media type %d\n", __func__, g_boot_medium);
     }
+#endif
+
+    ret = k230_read_medium(K230_TOC_OFFSET, ~0ULL,
+                   K230_TOC_MAX_ENTRIES * K230_TOC_ENTRY_SIZE, toc_buf);
+    if (ret)
+        printf("%s: failed to read TOC: %d\n", __func__, ret);
 
 out:
     if (0 != ret) {
@@ -695,7 +809,7 @@ static int k230_parse_toc(void *toc_buf)
 	for (int i = 0; i < K230_TOC_MAX_ENTRIES; i++) {
         struct k230_toc_entry *dst = &toc.entries[toc.entry_count];
 
-        /* SPI-NAND keeps unwritten TOC slots erased as 0xff. */
+        /* SPI flash keeps unwritten TOC slots erased as 0xff. */
         if ((src->name[0] == '\0') || ((u8)src->name[0] == 0xff)) {
 			break;
 		}
@@ -868,6 +982,7 @@ static uint _k230_load_img(const char *toc_name, uint64_t offset,
     int ret = 0;
     ulong src_len, src_data, dst_len, plain_addr = 0;
     ulong max_payload_len = 0;
+    uint64_t limit;
     image_header_t *pUh = NULL;
     ulong buff = k230_get_encrypted_image_load_addr();
     firmware_head_s *pfh = (firmware_head_s*)buff;
@@ -880,145 +995,39 @@ static uint _k230_load_img(const char *toc_name, uint64_t offset,
         goto out;
     }
 
-#if defined(CONFIG_MMC)
-    if ((BOOT_MEDIUM_SDIO0 == g_boot_medium) || (BOOT_MEDIUM_SDIO1 == g_boot_medium)) {
-        ulong blk_s = offset / BLKSZ;
-        ulong data_sect = 0;
-
-        if (IMG_PART_NOT_EXIT == blk_s) {
-            printf("%s: invalid blk num\n", __func__);
-            ret = -1;
-            goto out;
-        }
-
-        if (NULL == pblk_desc) {
-            printf("%s: mmc is not init\n", __func__);
-            ret = -1;
-            goto out;
-        }
-
-    	ret = blk_dread(pblk_desc, blk_s, HD_BLK_NUM, (char*)buff);
-    	if (ret != HD_BLK_NUM) {
-    	    printf("%s: blk_dread fail: %d\n", __func__, ret);
-    	    ret = -1;
-    	    goto out;
-    	}
-
-        if (pfh->magic != K230_IMAGE_MAGIC_NUM) {
-            printf("%s: pfh->magic 0x%x != 0x%x blk=0x%lx buff=0x%lx\n",
-                   __func__, pfh->magic, K230_IMAGE_MAGIC_NUM, blk_s, buff);
-            ret = -1;
-            goto out;
-        }
-
-        if (pfh->length > max_payload_len) {
-            printf("%s: %s payload 0x%x exceeds limit 0x%lx (part=0x%llx)\n",
-                   __func__, toc_name, pfh->length, max_payload_len,
-                   partition_size);
-            ret = -1;
-            goto out;
-        }
-
-        data_sect = DIV_ROUND_UP(pfh->length + sizeof(*pfh), BLKSZ) - HD_BLK_NUM;
-        ret = blk_dread(pblk_desc, blk_s + HD_BLK_NUM, data_sect, (char*)buff + HD_BLK_NUM * BLKSZ);
-        if (ret != data_sect) {
-            printf("%s: blk_dread failed: %d\n", __func__, ret);
-            ret = -1;
-            goto out;
-        }
-
-    } else
-#endif
-#if defined(CONFIG_MTD_SPI_NAND)
-    if (g_boot_medium == BOOT_MEDIUM_NANDFLASH) {
-        u_char*          buf           = (u_char*)buff;
-        size_t           blocksize     = 0;
-        size_t           amount_loaded = 0;
-        size_t           end           = 0;
-        ulong            off           = offset;
-
-        static struct mtd_info* mtd;
-        struct mtd_oob_ops      io_op = {};
-
-        if (IMG_PART_NOT_EXIT == off) {
-            return IMG_PART_NOT_EXIT;
-        }
-
-        mtd = get_mtd_by_name(SPINAND_NAME);
-        if (IS_ERR_OR_NULL(mtd)) {
-            printf("%s: get_mtd_by_name fail\n", __func__);
-            ret = -1;
-            goto out;
-        }
-
-        blocksize = mtd->erasesize;
-
-        end = off + sizeof(*pfh);
-
-        io_op.mode   = MTD_OPS_AUTO_OOB;
-        io_op.len    = mtd->writesize;
-        io_op.ooblen = 0;
-        io_op.oobbuf = NULL;
-
-        amount_loaded = 0;
-        while (off < end) {
-            if (mtd_is_aligned_with_block_size(mtd, off) && mtd_block_isbad(mtd, off)) {
-                off += blocksize;
-            } else {
-                io_op.datbuf = &buf[amount_loaded];
-                if (mtd_read_oob(mtd, off, &io_op)) {
-                    printf("%s: read firmware head error\n", __func__);
-                    put_mtd_device(mtd);
-                    ret = -1;
-                    goto out;
-                }
-
-                off += io_op.retlen;
-                amount_loaded += io_op.retlen;
-            }
-        }
-
-        if (K230_IMAGE_MAGIC_NUM != pfh->magic) {
-            printf("%s: pfh->magic 0x%x != 0x%x off=0x%lx buff=0x%lx ",
-                   __func__, pfh->magic, K230_IMAGE_MAGIC_NUM, off, buff);
-            put_mtd_device(mtd);
-            ret = -1;
-            goto out;
-        }
-
-        if (pfh->length > max_payload_len) {
-            printf("%s: %s payload 0x%x exceeds limit 0x%lx (part=0x%llx)\n",
-                   __func__, toc_name, pfh->length, max_payload_len,
-                   partition_size);
-            put_mtd_device(mtd);
-            ret = -1;
-            goto out;
-        }
-
-        if (pfh->length > (mtd->writesize - sizeof(*pfh))) {
-            end = off + pfh->length - (mtd->writesize - sizeof(*pfh));
-            while (off < end) {
-                if (mtd_is_aligned_with_block_size(mtd, off) && mtd_block_isbad(mtd, off)) {
-                    off += blocksize;
-                } else {
-                    io_op.datbuf = &buf[amount_loaded];
-                    if (mtd_read_oob(mtd, off, &io_op)) {
-                        printf("%s: read firmware error\n", __func__);
-                        put_mtd_device(mtd);
-                        ret = -1;
-                        goto out;
-                    }
-
-                    off += io_op.retlen;
-                    amount_loaded += io_op.retlen;
-                }
-            }
-        }
-    } else
-#endif
-    {
+    if (IMG_PART_NOT_EXIT == offset || partition_size > ~0ULL - offset) {
+        printf("%s: invalid partition for %s: off=0x%llx size=0x%llx\n",
+               __func__, toc_name, offset, partition_size);
         ret = -1;
-        printf("%s: Error, unsupport media type %d\n", __func__, g_boot_medium);
+        goto out;
+    }
+    limit = offset + partition_size;
+
+    ret = k230_read_medium(offset, limit, sizeof(*pfh), (void *)buff);
+    if (ret) {
+        printf("%s: read firmware header of %s failed: %d\n", __func__, toc_name, ret);
+        goto out;
+    }
+
+    if (pfh->magic != K230_IMAGE_MAGIC_NUM) {
+        printf("%s: %s magic 0x%x != 0x%x off=0x%llx\n",
+               __func__, toc_name, pfh->magic, K230_IMAGE_MAGIC_NUM, offset);
+        ret = -1;
+        goto out;
+    }
+
+    if (pfh->length > max_payload_len) {
+        printf("%s: %s payload 0x%x exceeds limit 0x%lx (part=0x%llx)\n",
+               __func__, toc_name, pfh->length, max_payload_len,
+               partition_size);
+        ret = -1;
+        goto out;
+    }
+
+    /* Re-read from the image start so the read stays aligned on every medium. */
+    ret = k230_read_medium(offset, limit, sizeof(*pfh) + pfh->length, (void *)buff);
+    if (ret) {
+        printf("%s: read firmware %s failed: %d\n", __func__, toc_name, ret);
         goto out;
     }
 
