@@ -84,6 +84,13 @@ jobs:
           source ~/.canmv_venv/bin/activate
           export SKIP_TOOLCHAIN_CHECK=1
 
+          # These SDK configs build U-Boot from source and need no prebuilts:
+          #   k230_canmv_01studio_emmc_defconfig
+          #   k230_canmv_dongshanpi_lpddr4_defconfig
+          #   k230_canmv_gt6700_camera_ext_defconfig
+          #   k230_canmv_rockbase_defconfig
+          #   k230d_canmv_mini_defconfig
+          #   k230d_y35_defconfig
           declare -A defconfig_to_board=(
             [k230_rtos_aihardware_defconfig]="k230_aihardware"
             [k230_canmv_v1p0p1_defconfig]="k230_canmv"
@@ -92,6 +99,7 @@ jobs:
             [k230_canmv_gt6700_defconfig]="k230_canmv_gt6700"
             [k230_canmv_hiwonder_defconfig]="k230_canmv_hiwonder"
             [k230_canmv_lckfb_defconfig]="k230_canmv_lckfb"
+            [k230_canmv_mrt_defconfig]="k230_canmv_mrt"
             [k230_canmv_rtt_evb_defconfig]="k230_canmv_rtt_evb"
             [k230_canmv_v3p0_defconfig]="k230_canmv_v3p0"
             [k230_canmv_wondermk_defconfig]="k230_canmv_wondermk"
@@ -118,8 +126,8 @@ jobs:
             mkdir -p ~/artifacts/${base_name}
 
             make ${UBOOT_DEFCONFIG} || exit $?
-            # disable prebuilt
-            sed -i 's/^CONFIG_UBOOT_USE_PREBUILT=y$/CONFIG_UBOOT_USE_PREBUILT=n/' ${{ github.workspace }}/canmv_k230/.config
+            # Disable prebuilt without replacing the SDK's .config symlink.
+            sed -i --follow-symlinks 's/^CONFIG_UBOOT_USE_PREBUILT=y$/CONFIG_UBOOT_USE_PREBUILT=n/' ${{ github.workspace }}/canmv_k230/.config
             make -j8 uboot || exit $?
 
             # Also copy artifacts to artifacts folder
