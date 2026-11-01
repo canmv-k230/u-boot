@@ -130,6 +130,15 @@ config DWAPB_GPIO
 	help
 	  Support for the Designware APB GPIO driver.
 
+config SPL_DWAPB_GPIO
+	bool "DWAPB GPIO driver in SPL"
+	depends on DWAPB_GPIO && SPL_DM_GPIO
+	help
+	  Support for the Designware APB GPIO driver in SPL. The driver is
+	  otherwise built for U-Boot proper only. Enable this when SPL itself
+	  must drive GPIOs before loading the next image, for example GPIO
+	  controlled regulators that set an SD card's supply and I/O voltage.
+
 config AT91_GPIO
 	bool "AT91 PIO GPIO driver"
 	help

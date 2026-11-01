@@ -37,6 +37,7 @@
 #include <stdio.h>
 
 #include <spi_flash.h>
+#include <power/regulator.h>
 
 #include "board_common.h"
 
@@ -119,6 +120,15 @@ void spl_device_disable(void) {
 
 int spl_board_init_f(void) {
   int ret = 0;
+
+#if CONFIG_IS_ENABLED(DM_REGULATOR)
+  /* A SoC reset keeps external regulators at their DVFS voltages while
+   * boot runs the maximum clocks: apply boot-on rails before DDR training.
+   */
+  ret = regulators_enable_boot_on(false);
+  if (ret)
+    printf("regulators: boot-on setup failed (%d)\n", ret);
+#endif
 
   spl_device_disable();
 

@@ -56,6 +56,29 @@
 	max-frequency = <52000000>;
 };
 
+&i2c4 {
+	/* IO7/IO8 come from the board table the iomux applies at DM init. */
+	clock-frequency = <100000>;
+	status = "okay";
+	u-boot,dm-pre-reloc;
+
+	/* DVFS lowers this rail and a SoC reset keeps it; SPL restores the
+	 * 1.6 GHz voltage before running at boot clocks. */
+	vdd_cpu: regulator@49 {
+		compatible = "ti,tps62864";
+		reg = <0x49>;
+		regulator-name = "vdd_cpu";
+		regulator-min-microvolt = <800000>;
+		regulator-max-microvolt = <800000>;
+		/* U-Boot waits |dV| / ramp after a change: 0.5 mV/us is a
+		 * conservative allowance, not the converter's slew setting. */
+		regulator-ramp-delay = <500>;
+		regulator-boot-on;
+		regulator-always-on;
+		u-boot,dm-pre-reloc;
+	};
+};
+
 &iomux {
 	pinctrl-names = "default";
 	pinctrl-0 = <&drop_pins &pins>;

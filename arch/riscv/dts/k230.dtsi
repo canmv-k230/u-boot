@@ -232,6 +232,104 @@
 			status = "disabled";
 		};
 
+		/* DesignWare APB GPIO: gpio0 port A is IO0-31, gpio1 port A IO32-63
+		 * and port B IO64-71. */
+		gpio0: gpio@9140b000 {
+			compatible = "snps,dw-apb-gpio";
+			reg = <0x0 0x9140b000 0x0 0x1000>;
+			#address-cells = <1>;
+			#size-cells = <0>;
+			status = "disabled";
+
+			gpio0_porta: gpio-port@0 {
+				compatible = "snps,dw-apb-gpio-port";
+				gpio-controller;
+				#gpio-cells = <2>;
+				snps,nr-gpios = <32>;
+				reg = <0>;
+			};
+		};
+
+		gpio1: gpio@9140c000 {
+			compatible = "snps,dw-apb-gpio";
+			reg = <0x0 0x9140c000 0x0 0x1000>;
+			#address-cells = <1>;
+			#size-cells = <0>;
+			status = "disabled";
+
+			gpio1_porta: gpio-port@0 {
+				compatible = "snps,dw-apb-gpio-port";
+				gpio-controller;
+				#gpio-cells = <2>;
+				snps,nr-gpios = <32>;
+				reg = <0>;
+			};
+
+			gpio1_portb: gpio-port@1 {
+				compatible = "snps,dw-apb-gpio-port";
+				gpio-controller;
+				#gpio-cells = <2>;
+				snps,nr-gpios = <8>;
+				reg = <1>;
+			};
+		};
+
+		/* I2C core clock: PLL0/4 through a 1..8 divider, so at most 400 MHz.
+		 * There is no K230 clock driver; overstating the rate only makes
+		 * SCL slower than the requested bus frequency. */
+		i2c_clk: i2c_clk {
+			compatible = "fixed-clock";
+			clock-frequency = <400000000>;
+			clock-output-names = "i2c-clk";
+			#clock-cells = <0>;
+			u-boot,dm-pre-reloc;
+		};
+
+		i2c0: i2c@91405000 {
+			compatible = "snps,designware-i2c";
+			reg = <0x0 0x91405000 0x0 0x1000>;
+			clocks = <&i2c_clk>;
+			#address-cells = <1>;
+			#size-cells = <0>;
+			status = "disabled";
+		};
+
+		i2c1: i2c@91406000 {
+			compatible = "snps,designware-i2c";
+			reg = <0x0 0x91406000 0x0 0x1000>;
+			clocks = <&i2c_clk>;
+			#address-cells = <1>;
+			#size-cells = <0>;
+			status = "disabled";
+		};
+
+		i2c2: i2c@91407000 {
+			compatible = "snps,designware-i2c";
+			reg = <0x0 0x91407000 0x0 0x1000>;
+			clocks = <&i2c_clk>;
+			#address-cells = <1>;
+			#size-cells = <0>;
+			status = "disabled";
+		};
+
+		i2c3: i2c@91408000 {
+			compatible = "snps,designware-i2c";
+			reg = <0x0 0x91408000 0x0 0x1000>;
+			clocks = <&i2c_clk>;
+			#address-cells = <1>;
+			#size-cells = <0>;
+			status = "disabled";
+		};
+
+		i2c4: i2c@91409000 {
+			compatible = "snps,designware-i2c";
+			reg = <0x0 0x91409000 0x0 0x1000>;
+			clocks = <&i2c_clk>;
+			#address-cells = <1>;
+			#size-cells = <0>;
+			status = "disabled";
+		};
+
 		iomux: iomux@91105000 {
 			compatible = "pinctrl-single";
 			reg = <0x0 0x91105000 0x0 0x10000>;

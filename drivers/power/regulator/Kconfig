@@ -318,6 +318,16 @@ config DM_REGULATOR_TPS62360
 	implements the get/set api for value only, as the power line is
 	always on.
 
+config DM_REGULATOR_TPS6286X
+	bool "Enable driver for TPS6286x Power Regulator"
+	depends on DM_REGULATOR && DM_I2C
+	help
+	The TPS6286X (TPS62864, TPS62866, TPS62868, TPS62869) is an I2C
+	controlled DC/DC step down converter, 0.4 V to 1.675 V in 5 mV steps.
+	This driver implements the get/set api for value and enable on VOUT1.
+	The K230 boards use it for the CPU rail, which SPL restores to its
+	boot voltage before DDR training.
+
 config DM_REGULATOR_STPMIC1
 	bool "Enable driver for STPMIC1 regulators"
 	depends on DM_REGULATOR && PMIC_STPMIC1
