@@ -40,29 +40,6 @@ secondary_harts_relocation_error:
 .section .text
 .globl _start
 _start:
-#ifdef KENDRYTE_K230
-	li t0, 0x80200000
-	rdtime t1
-	sd t1, (t0)
-
-	li t0, 0x80200008
-	rdcycle t1
-	sd t1, (t0)
-
-	li t0, 0x80200010
-	#rdinstret t1
-	li t1, 0x736273
-	sd t1, (t0)
-
-	li t0, 0x80200020
-	sd x0, (t0)
-	li t0, 0x80208008
-	sd x0, (t0)
-
-	li t0, 0x70013
-	csrs mcor,t0
-#endif
-
 #if CONFIG_IS_ENABLED(RISCV_MMODE)
 	csrr	a0, CSR_MHARTID
 #endif
