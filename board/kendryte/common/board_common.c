@@ -90,6 +90,27 @@ int board_init(void)
 }
 #endif
 
+int ddr_rollback_test(uint64_t size)
+{
+	uint64_t ddr_half_size = size >> 1;
+	uint64_t read_value;
+	uint64_t ddr_detect_pattern[] = {0x1234567887654321, 0x1122334455667788};
+
+	writeq(ddr_detect_pattern[0], (void __iomem *)0);
+	flush_dcache_range(0, CONFIG_SYS_CACHELINE_SIZE);
+
+	writeq(ddr_detect_pattern[1], (void __iomem *)ddr_half_size);
+	flush_dcache_range(ddr_half_size, ddr_half_size + CONFIG_SYS_CACHELINE_SIZE);
+
+	invalidate_dcache_range(0, CONFIG_SYS_CACHELINE_SIZE);
+	read_value = readq((void __iomem *)0);
+	if (read_value == ddr_detect_pattern[1]) {
+		printf("ddr rollback test failed, size=%llx\n", size);
+		return 1; //检测到回卷，测试失败
+	}
+
+	return 0;
+}
 uint64_t detect_ddr_size(void)
 {
     uint64_t ddr_size = 0;
@@ -106,7 +127,7 @@ uint64_t detect_ddr_size(void)
     writeq(ddr_detect_pattern[0], CONFIG_MEM_BASE_ADDR + 8);
     flush_dcache_range(CONFIG_MEM_BASE_ADDR, CONFIG_MEM_BASE_ADDR + CONFIG_SYS_CACHELINE_SIZE);
 
-    for (ddr_size = 128 * 1024 * 1024; ddr_size <= (u64)(1 * 1024 * 1024 * 1024); ddr_size = ddr_size << 1) {
+    for (ddr_size = 128 * 1024 * 1024; ddr_size <= (uint64_t)(1 * 1024 * 1024 * 1024); ddr_size = ddr_size << 1) {
         invalidate_dcache_range(ddr_size, ddr_size + CONFIG_SYS_CACHELINE_SIZE);
         readv0 = readq(ddr_size);
         if (readv0 == ddr_detect_pattern[0]) {
@@ -119,13 +140,17 @@ uint64_t detect_ddr_size(void)
             }
         }
     }
+    if(ddr_rollback_test(ddr_size) != 0){
+		printf("ddr detect error %llx, set ddr size to 128MB \n\n", ddr_size);
+		ddr_size = 0x8000000;
+	}
 
     gd->ram_size = ddr_size;
     g_dram_size  = ddr_size;
 
+
     return ddr_size;
 }
-
 int dram_init(void)
 {
     detect_ddr_size();
